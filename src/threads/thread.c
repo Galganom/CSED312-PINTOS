@@ -4,7 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
-#include "threads/fixed_point.h"
+#include "threads/real_num_calc.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -116,7 +116,7 @@ thread_init (void)
 void
 thread_start (void) 
 {
-  load_avg = LOAD_AVG_DEFAULT;
+  load_avg = 0;
   /* Create the idle thread. */
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
@@ -354,7 +354,8 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  if (thread_mlfqs) return;
+  if(thread_mlfqs) return;
+
   if(!thread_mlfqs) 
   {
   struct thread *t = thread_current ();
@@ -378,23 +379,21 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
-  // 현재 스레드의 nice 값을 새 값으로 설정
-  enum intr_level old_level = intr_disable ();
-  thread_current ()->nice = nice;
-  mlfqs_calculate_priority (thread_current ());
-  thread_test_preemption ();
-  intr_set_level (old_level);
+  // nice value update
+  enum intr_level old = intr_disable();
+  thread_current() -> nice = nice;
+  adv_scheduler_calc_priority(thread_current());
+  thread_test_preemption();
+  intr_set_level(old);
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  // 현재 스레드의 nice 값을 반환
-  enum intr_level old_level = intr_disable ();
-  int nice = thread_current ()-> nice;
-  intr_set_level (old_level);
+  enum intr_level old = intr_disable();
+  int nice = thread_current() -> nice;
+  intr_set_level(old);
   return nice;
 }
 
@@ -402,22 +401,20 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  // 현재 시스템의 load_avg * 100 값을 반환
-  enum intr_level old_level = intr_disable ();
-  int load_avg_value = fp_to_int_round (mult_mixed (load_avg, 100));
-  intr_set_level (old_level);
-  return load_avg_value;
+  enum intr_level old = intr_disable();
+  int load_avg_num = roundFp2Int(multM (load_avg, 100));
+  intr_set_level(old);
+  return load_avg_num;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  // 현재 스레드의 recent_cpu * 100 값을 반환
-  enum intr_level old_level = intr_disable ();
-  int recent_cpu= fp_to_int_round (mult_mixed (thread_current ()->recent_cpu, 100));
-  intr_set_level (old_level);
-  return recent_cpu;
+  enum intr_level old = intr_disable();
+  int recent = roundFp2Int(multM (thread_current() -> recent_cpu, 100));
+  intr_set_level(old);
+  return recent;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -511,8 +508,8 @@ init_thread (struct thread *t, const char *name, int priority)
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
 
-  t->nice = NICE_DEFAULT;
-  t->recent_cpu = RECENT_CPU_DEFAULT;
+  t->nice = 0;
+  t->recent_cpu = 0;
 
   memset (t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
@@ -747,61 +744,42 @@ bool wakeup_time_less_func(const struct list_elem *a, const struct list_elem *b,
     return thread_A->wakeup_tick < thread_B->wakeup_tick;
 }
 
-void
-mlfqs_calculate_priority (struct thread *t)
-{
-  if (t == idle_thread) 
-    return ;
-  t->priority = fp_to_int (add_mixed (div_mixed (t->recent_cpu, -4), PRI_MAX - t->nice * 2));
+void adv_scheduler_calc_priority (struct thread *t) {
+  if (t == idle_thread) return;
+  t->priority = f2Int(addM(divM(t->recent_cpu, -4), PRI_MAX - t->nice * 2));
 }
 
-void
-mlfqs_calculate_recent_cpu (struct thread *t)
-{
-  if (t == idle_thread)
-    return ;
-  t->recent_cpu = add_mixed (mult_fp (div_fp (mult_mixed (load_avg, 2), add_mixed (mult_mixed (load_avg, 2), 1)), t->recent_cpu), t->nice);
+void adv_scheduler_calc_recent_cpu (struct thread *t) {
+  if (t == idle_thread) return;
+  t->recent_cpu = addM(multF(divF(multM(load_avg, 2), addM(multM(load_avg, 2), 1)), t->recent_cpu), t->nice);
 }
 
-void 
-mlfqs_calculate_load_avg (void) 
-{
-  int ready_threads;
-  
-  if (thread_current () == idle_thread)
-    ready_threads = list_size (&ready_list);
-  else
-    ready_threads = list_size (&ready_list) + 1;
+void adv_scheduler_calc_load_avg (void) {
+  int thread_ready_num;
+  if (thread_current() == idle_thread) {
+    thread_ready_num = list_size(&ready_list);
+  } else {
+    thread_ready_num = list_size(&ready_list) + 1;
+  }
 
-  load_avg = add_fp (mult_fp (div_fp (int_to_fp (59), int_to_fp (60)), load_avg), 
-                     mult_mixed (div_fp (int_to_fp (1), int_to_fp (60)), ready_threads));
+  load_avg = addF(multF(divF(int2F(59), int2F(60)), load_avg), multM(divF(int2F(1), int2F(60)), thread_ready_num));
 }
 
-void
-mlfqs_increment_recent_cpu (void)
-{
-  if (thread_current () != idle_thread)
-    thread_current ()->recent_cpu = add_mixed (thread_current ()->recent_cpu, 1);
+void adv_scheduler_up_recent_cpu (void) {
+  if (thread_current() != idle_thread) thread_current() -> recent_cpu = addM(thread_current() -> recent_cpu, 1);
 }
 
-void
-mlfqs_recalculate_recent_cpu (void)
-{
-  struct list_elem *e;
-
-  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
-    struct thread *t = list_entry (e, struct thread, allelem);
-    mlfqs_calculate_recent_cpu (t);
+void adv_scheduler_upadte_recent_cpu (void) {
+  struct list_elem *elem;
+  for (elem = list_begin(&all_list); elem != list_end(&all_list); elem = list_next(elem)) {
+    adv_scheduler_calc_recent_cpu(list_entry(elem, struct thread, allelem));
   }
 }
 
-void
-mlfqs_recalculate_priority (void)
-{
-  struct list_elem *e;
+void adv_scheduler_update_priority (void) {
+  struct list_elem *elem;
 
-  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
-    struct thread *t = list_entry (e, struct thread, allelem);
-    mlfqs_calculate_priority (t);
+  for (elem = list_begin(&all_list); elem != list_end(&all_list); elem = list_next(elem)) {
+    adv_scheduler_calc_priority(list_entry(elem, struct thread, allelem));
   }
 }
