@@ -258,8 +258,9 @@ lock_try_acquire (struct lock *lock)
 void
 lock_release (struct lock *lock) 
 {
-  lock->holder = NULL;
+  
   if (thread_mlfqs) {
+    lock->holder = NULL;
     sema_up (&lock->semaphore);
     return ;
   }
