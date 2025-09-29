@@ -185,8 +185,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
       mlfqs_recalculate_priority ();
     }
     if (ticks % TIMER_FREQ == 0) {
-      mlfqs_recalculate_recent_cpu ();
       mlfqs_calculate_load_avg ();
+      mlfqs_recalculate_recent_cpu ();
     }
   }
   thread_wakeup (ticks);
