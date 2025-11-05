@@ -179,11 +179,14 @@ timer_interrupt (struct intr_frame *args UNUSED)
   thread_tick ();
   if (thread_mlfqs) {
     struct thread *t = thread_current();
-    if (t->status == THREAD_RUNNING) adv_scheduler_up_recent_cpu();
-    if (ticks % 4 == 0) adv_scheduler_update_priority();
+    if (t->status == THREAD_RUNNING)
+      mlfqs_increment_recent_cpu ();
+    if (ticks % 4 == 0) {
+      mlfqs_recalculate_priority ();
+    }
     if (ticks % TIMER_FREQ == 0) {
-      adv_scheduler_calc_load_avg();
-      adv_scheduler_upadte_recent_cpu();
+      mlfqs_calculate_load_avg ();
+      mlfqs_recalculate_recent_cpu ();
     }
   }
   thread_wakeup (ticks);
