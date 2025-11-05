@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -28,43 +29,161 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  char *cmd_line_copy; // start_process에 전달할 원본 명령어 복사본
+  char *parsing_copy;  // strtok_r로 파싱할 복사본
+  char *prog_name;     // 파싱된 프로그램 이름
+  char *save_ptr;      // strtok_r 상태 저장용 포인터
   tid_t tid;
 
-  /* Make a copy of FILE_NAME.
+  /* Make a copy of FILE_NAME for parsing and another for start_process.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  // 원본 보존용 복사본 생성
+  cmd_line_copy = palloc_get_page (0);
+  if (cmd_line_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (cmd_line_copy, file_name, PGSIZE);
 
-  /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  // 파싱용 복사본 생성
+  parsing_copy = palloc_get_page (0);
+  if (parsing_copy == NULL) 
+    {
+      palloc_free_page (cmd_line_copy); // 앞에서 할당한 것도 해제
+      return TID_ERROR;
+    }
+  strlcpy (parsing_copy, file_name, PGSIZE);
+
+  /* Extract the program name using strtok_r. */
+  // 프로그램 이름 파싱
+  prog_name = strtok_r (parsing_copy, " ", &save_ptr);
+  if (prog_name == NULL) // 빈 문자열이나 공백만 들어온 경우 처리
+    {
+      palloc_free_page (cmd_line_copy);
+      palloc_free_page (parsing_copy);
+      return TID_ERROR;
+    }
+
+  /* Create a new thread to execute the program.
+     Pass the extracted program name as the thread name,
+     and the original command line copy as the argument to start_process. */
+  // 수정된 인자로 스레드 생성
+  tid = thread_create (prog_name, PRI_DEFAULT, start_process, cmd_line_copy);
+
+  /* Free the parsing copy, it's no longer needed. */
+  // 파싱용 복사본 해제
+  palloc_free_page (parsing_copy);
+
+  // 스레드 생성 실패 시 원본 복사본도 해제
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    {
+      /* If thread_create failed, free the command line copy too. */
+      palloc_free_page (cmd_line_copy); 
+    }
+    
   return tid;
 }
 
-/* A thread function that loads a user process and starts it
-   running. */
-static void
-start_process (void *file_name_)
+struct thread *
+process_get_child_by_tid (tid_t child_tid)
 {
-  char *file_name = file_name_;
+  struct thread *cur = thread_current ();
+  struct list_elem *e;
+
+  for (e = list_begin (&cur->child_list); e != list_end (&cur->child_list);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, child_elem);
+      if (t->tid == child_tid)
+        {
+          return t;
+        }
+    }
+  
+  return NULL;
+}
+
+/* A thread function that loads a user process and starts it running. */
+static void
+start_process (void *command_line_) // Renamed parameter for clarity
+{
+  char *command_line = command_line_; // Original command line copy from process_execute aux
   struct intr_frame if_;
   bool success;
+
+  /* === Argument Parsing Logic Added === */
+  char *token, *save_ptr;
+  int argc = 0;
+  char **argv = NULL; // Dynamic allocation for argv
+
+  // Count arguments first using a temporary copy
+  char *count_copy = palloc_get_page(0); 
+  if (count_copy == NULL) {
+      palloc_free_page(command_line); // Free the original copy passed from process_execute
+      thread_exit(); 
+  }
+  strlcpy(count_copy, command_line, PGSIZE);
+  for (token = strtok_r (count_copy, " ", &save_ptr); token != NULL;
+       token = strtok_r (NULL, " ", &save_ptr)) {
+      argc++;
+  }
+  palloc_free_page(count_copy); // Free the counting copy
+
+  // Allocate argv array dynamically
+  argv = (char **)malloc(sizeof(char *) * argc); 
+  if (argv == NULL) {
+      palloc_free_page(command_line);
+      thread_exit();
+  }
+
+  // Populate argv using another temporary copy for parsing
+  int current_arg = 0;
+  char *parse_copy = palloc_get_page(0); 
+  if (parse_copy == NULL) {
+      free(argv); // Free argv if allocation fails
+      palloc_free_page(command_line);
+      thread_exit();
+  }
+  strlcpy(parse_copy, command_line, PGSIZE);
+  for (token = strtok_r (parse_copy, " ", &save_ptr); token != NULL;
+       token = strtok_r (NULL, " ", &save_ptr)) {
+      argv[current_arg++] = token;
+  }
+  char *prog_name = argv[0]; // Program name is the first token
+  /* === Argument Parsing Logic Ends === */
+
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  
+  // Load using the parsed program name (argv[0])
+  success = load (prog_name, &if_.eip, &if_.esp);
+
+  // 1. load() 결과를 부모가 알 수 있도록 플래그에 기록
+  thread_current ()->load_success = success;
+  // 2. load가 끝났음을 exec()을 호출한 부모에게 알림 (부모를 깨움)
+  sema_up (&thread_current ()->sema_load_complete);
+
+  /* === Stack Construction Logic Added === */
+  // If load succeeds, construct the user stack
+  if (success) 
+    {
+      construct_user_stack(argc, argv, &if_.esp);
+    }
+  /* === Stack Construction Logic Ends === */
+
+  /* Free resources used for parsing before jumping to user space */
+  free(argv);             // Free the dynamically allocated argv array
+  palloc_free_page(parse_copy); // Free the copy used for parsing argv
+  palloc_free_page (command_line); // Free the original command line copy passed from process_execute
+
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+  // Moved the check after freeing resources, before jumping
+  if (!success) {
+      thread_exit (); 
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -74,6 +193,56 @@ start_process (void *file_name_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+}
+
+/* Constructs the user stack according to the x86 calling convention. */
+void
+construct_user_stack(int argc, char **argv, void **esp) 
+{
+    // Temporary storage for stack addresses of the copied argument strings
+    char *arg_addresses[argc]; 
+    int i;
+    size_t total_arg_len = 0; // Keep track for potential debugging or future use
+
+    // 1. Push argument strings onto the stack (from high address to low address)
+    //    and store their addresses.
+    for (i = 0; i < argc; i++) {
+        size_t arg_len = strlen(argv[i]) + 1; // Length including null terminator
+        *esp -= arg_len;
+        memcpy(*esp, argv[i], arg_len);   // Copy string to stack
+        arg_addresses[i] = *esp;          // Save the stack address of this string
+        total_arg_len += arg_len;
+    }
+
+    // 2. Word Align: Align the stack pointer to a multiple of 4 bytes.
+    int padding = (uintptr_t)*esp % 4;
+    if (padding != 0) {
+        *esp -= padding;                // Decrement stack pointer by padding amount
+        memset(*esp, 0, padding);       // Fill padding space with zeros
+    }
+
+    // 3. Push argument addresses (in reverse order onto the stack)
+    // Push null sentinel (argv[argc]) first
+    *esp -= sizeof(char *);             // Make space for the null pointer
+    **(char ***)esp = NULL;              // Write the null pointer
+
+    // Push addresses of the actual argument strings (argv[argc-1] down to argv[0])
+    for (i = argc - 1; i >= 0; i--) {
+        *esp -= sizeof(char *);             // Make space for the pointer
+        **(char ***)esp = arg_addresses[i]; // Write the string address
+    }
+
+    // 4. Push argv (the address of argv[0] on the stack) and argc
+    char **argv_on_stack = (char **)*esp; // This is where argv[0]'s pointer resides
+    *esp -= sizeof(char **);            // Make space for the argv pointer itself
+    **(char ****)esp = argv_on_stack;     // Write the address of argv[0] on stack
+
+    *esp -= sizeof(int);                // Make space for argc
+    **(int **)esp = argc;               // Write the argument count
+
+    // 5. Push fake return address (required by calling convention)
+    *esp -= sizeof(void *);             // Make space for the return address
+    **(void ***)esp = NULL;              // Write NULL as the fake return address
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -88,7 +257,35 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  // 1. tid를 이용해 내 자식 리스트에서 해당 자식 스레드를 찾습니다.
+  //    (이전에 추가한 process_get_child_by_tid 헬퍼 함수 사용)
+  struct thread *child_thread = process_get_child_by_tid (child_tid);
+
+  // 2. 자식이 아니거나, tid가 유효하지 않거나,
+  //    이미 wait한 자식인 경우 (리스트에서 제거됨) -1을 반환합니다.
+  if (child_thread == NULL)
+    {
+      return -1;
+    }
+
+  // 3. 자식이 exit()을 호출할 때까지 대기합니다.
+  //    (자식이 thread_exit()에서 sema_wait_on_child를 'up'해줄 것입니다.)
+  sema_down (&child_thread->sema_wait_on_child);
+
+  // 4. 자식이 종료되었으므로, 자식이 저장한 종료 상태를 가져옵니다.
+  //    (자식은 `sema_up` 후 `struct thread`에 접근하지 않음을 보장합니다.)
+  int exit_status = child_thread->process_exit_status;
+
+  // 5. 부모의 자식 리스트에서 해당 자식을 제거합니다.
+  //    (두 번 wait 하는 것을 방지하는 효과도 있습니다.)
+  list_remove (&child_thread->child_elem);
+
+  // 6. 부모가 자식의 'struct thread'를 직접 해제합니다.
+  //    이것이 바로 '책임 이전'입니다. 자식은 스스로를 해제하지 않습니다.
+  palloc_free_page (child_thread);
+
+  // 7. 가져온 종료 상태를 반환합니다.
+  return exit_status;
 }
 
 /* Free the current process's resources. */
@@ -97,6 +294,12 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  for(int i = 2; i < cur->fd_max; i++) 
+  {
+    close(i);
+  }
+  palloc_free_page(cur->fd_table);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
