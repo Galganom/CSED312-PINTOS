@@ -108,9 +108,7 @@ sema_try_down (struct semaphore *sema)
 void
 sema_up (struct semaphore *sema) 
 {
-  enum intr_level old_level;
-  struct thread *unblocked_thread = NULL;
-  bool should_yield = false;
+   enum intr_level old_level;
 
   ASSERT (sema != NULL);
 
@@ -118,25 +116,16 @@ sema_up (struct semaphore *sema)
   if (!list_empty (&sema->waiters)) 
   {
     list_sort(&sema->waiters, thread_cmp_priority, NULL);
-    unblocked_thread = list_entry (list_pop_front (&sema->waiters), struct thread, elem);
-    thread_unblock (unblocked_thread);
-    should_yield = unblocked_thread->priority > thread_current ()->priority;
+    thread_unblock (list_entry (list_pop_front (&sema->waiters),struct thread, elem));
   }
     
   sema->value++;
   intr_set_level (old_level);
 
-  if (should_yield)
-    {
-      if (intr_context ())
-        intr_yield_on_return ();
-      else
-        thread_yield ();
-    }
-  else if (!intr_context ())
-    {
-      thread_test_preemption ();
-    }
+  if (!intr_context()) 
+  {
+     thread_test_preemption();
+  }
 }
 
 static void sema_test_helper (void *sema_);
