@@ -16,7 +16,7 @@ typedef int pid_t;
 unsigned tell(int fd);
 bool remove(const char* file);
 bool create(const char* file, unsigned initial_size);
-static void exit (int status);
+// void exit (int status);
 
 static void syscall_handler (struct intr_frame *);
 struct lock filesys_lock;
@@ -358,8 +358,7 @@ user_wait (pid_t pid)
   return process_wait (pid);
 }
 
-static void
-exit (int status)
+void exit (int status)
 {
   struct thread *cur = thread_current ();
 
