@@ -125,8 +125,12 @@ thread_start (void)
   /* Start preemptive thread scheduling. */
   intr_enable ();
 
-  /* Wait for the idle thread to initialize idle_thread. */
+  printf("DEBUG: main thread is now waiting for idle thread...\n");
+
   sema_down (&idle_started);
+
+  printf("DEBUG: main thread received signal from idle and is now running!\n");
+
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -135,7 +139,7 @@ void
 thread_tick (void) 
 {
   struct thread *t = thread_current ();
-
+  
   /* Update statistics. */
   if (t == idle_thread)
     idle_ticks++;
@@ -194,11 +198,7 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-
-  #ifdef USERPROG
-    t->parent_thread = thread_current (); // 현재 실행 중인 스레드가 새 스레드의 부모
-    list_push_back (&thread_current ()->child_list, &t->child_elem); // 부모의 자식 리스트에 지금 만든 새 스레드를 추가
-  #endif
+  
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -304,13 +304,6 @@ thread_exit (void)
 #ifdef USERPROG
   process_exit ();
 #endif
-
-  struct thread *cur = thread_current ();
-
-  if (cur->parent_thread != NULL) // 부모가 있는지 확인 (고아 프로세스 방지)
-    {
-      sema_up (&cur->sema_wait_on_child); // 이후 'struct thread'에 대한 모든 접근과 해제는 부모의 책임
-    }
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
@@ -442,11 +435,11 @@ idle (void *idle_started_ UNUSED)
   
    // 이미 idle_thread가 설정되어 있다면 중복 설정 방지
   if (idle_thread == NULL) {
-  idle_thread = thread_current ();
-    // printf("DEBUG: idle thread is about to signal main thread.\n");
-  sema_up (idle_started);
+    idle_thread = thread_current ();
+    printf("DEBUG: idle thread is about to signal main thread.\n");
+    sema_up (idle_started);
   } else {
-    // printf("DEBUG: ERROR - idle_thread already set!\n");
+    printf("DEBUG: ERROR - idle_thread already set!\n");
     return;
   }
 
@@ -529,15 +522,6 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init (&t->donations);
   
   t->magic = THREAD_MAGIC;
-
-  #ifdef USERPROG
-    list_init (&t->child_list);                 // 자식 리스트 초기화
-    sema_init (&t->sema_load_complete, 0);    // exec용 세마포어 초기화 (0)
-    sema_init (&t->sema_wait_on_child, 0);    // wait용 세마포어 초기화 (0)
-    t->parent_thread = NULL;                    // 부모는 기본적으로 NULL
-    t->load_success = false;                    // 로드 상태는 기본적으로 '실패'
-    t->process_exit_status = -1;                // 종료 상태는 기본적으로 -1
-  #endif
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
