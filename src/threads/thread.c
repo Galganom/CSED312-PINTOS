@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -183,10 +184,31 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
-  #ifdef USERPROG
-    t->parent_thread = thread_current (); // 현재 실행 중인 스레드가 새 스레드의 부모
-    list_push_back (&thread_current ()->child_list, &t->child_elem); // 부모의 자식 리스트에 지금 만든 새 스레드를 추가
-  #endif
+#ifdef USERPROG
+  {
+    struct thread *parent = thread_current ();
+    if (parent != NULL)
+      {
+        struct child_process *cp = malloc (sizeof *cp);
+        if (cp == NULL)
+          {
+            palloc_free_page (t);
+            return TID_ERROR;
+          }
+        cp->tid = tid;
+        cp->exit_status = -1;
+        cp->exited = false;
+        cp->wait_called = false;
+        cp->parent_alive = true;
+        cp->load_success = false;
+        sema_init (&cp->wait_sema, 0);
+        sema_init (&cp->load_sema, 0);
+        list_push_back (&parent->child_list, &cp->elem);
+        t->parent_thread = parent;
+        t->child_info = cp;
+      }
+  }
+#endif
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -293,10 +315,19 @@ thread_exit (void)
 
   struct thread *cur = thread_current ();
 
-  if (cur->parent_thread != NULL) // 부모가 있는지 확인 (고아 프로세스 방지)
+#ifdef USERPROG
+  if (cur->child_info != NULL)
     {
-      sema_up (&cur->sema_wait_on_child); // 이후 'struct thread'에 대한 모든 접근과 해제는 부모의 책임
+      struct child_process *cp = cur->child_info;
+      cp->exit_status = cur->process_exit_status;
+      cp->exited = true;
+      sema_up (&cp->wait_sema);
+      if (!cp->parent_alive)
+        free (cp);
+      cur->child_info = NULL;
     }
+  cur->parent_thread = NULL;
+#endif
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
@@ -476,14 +507,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
-  #ifdef USERPROG
+#ifdef USERPROG
     list_init (&t->child_list);                 // 자식 리스트 초기화
-    sema_init (&t->sema_load_complete, 0);    // exec용 세마포어 초기화 (0)
-    sema_init (&t->sema_wait_on_child, 0);    // wait용 세마포어 초기화 (0)
+    t->child_info = NULL;
     t->parent_thread = NULL;                    // 부모는 기본적으로 NULL
-    t->load_success = false;                    // 로드 상태는 기본적으로 '실패'
     t->process_exit_status = -1;                // 종료 상태는 기본적으로 -1
-  #endif
+#endif
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

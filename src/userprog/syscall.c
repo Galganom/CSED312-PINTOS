@@ -315,7 +315,7 @@ tid_t
 user_exec (const char *cmd_line)
 {
   tid_t tid;
-  struct thread *child_thread;
+  struct child_process *cp;
 
   //  자식 프로세스(스레드) 생성 요청 (process.c의 함수 호출)
   tid = process_execute (cmd_line);
@@ -325,20 +325,20 @@ user_exec (const char *cmd_line)
     {
       return -1;
     }
-  
-  child_thread = process_get_child_by_tid (tid); // 이 함수는 process.h에 선언되어있음
-  
+
+  cp = process_get_child_by_tid (tid); // 이 함수는 process.h에 선언되어있음
+
   //  자식을 찾을 수 없는 경우
-  if (child_thread == NULL)
+  if (cp == NULL)
     {
       return -1; 
     }
 
-  // 자식이 load()를 완료할 때까지 대기 (sema_load_complete가 'up'될 때까지)
-  sema_down (&child_thread->sema_load_complete);
+  // 자식이 load()를 완료할 때까지 대기 (load_sema가 'up'될 때까지)
+  sema_down (&cp->load_sema);
 
   // 자식의 load 성공 여부 확인
-  if (child_thread->load_success == true)
+  if (cp->load_success == true)
     {
       // 성공 시, 자식의 TID 반환
       return tid;

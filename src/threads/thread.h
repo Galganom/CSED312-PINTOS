@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include "synch.h"
 
+struct child_process;
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -97,18 +99,11 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    
+
+    struct child_process *child_info;   /* Parent/child shared state. */
     struct thread *parent_thread;       /* 이 스레드를 생성한 부모 스레드를 가리킴 */
     struct list child_list;             /* 이 스레드가 생성한 자식 스레드들의 리스트 */
-    struct list_elem child_elem;        /* 부모의 child_list에 연결되기 위한 리스트 요소 */
-
     int process_exit_status;            /* wait()가 반환할 종료 상태 (기본 -1) */
-    bool load_success;                  /* load() 성공 여부 (exec() 동기화용) */
-
-    struct semaphore sema_load_complete;  /* 자식의 load() 완료/실패를 부모가 기다리기 위한 세마포어 */
-    struct semaphore sema_wait_on_child;  /* 부모가 wait()에서 자식의 exit()을 기다리기 위한 세마포어 */
-
-    int exit_status;
 
     struct file **fd_table;
     int fd_max;

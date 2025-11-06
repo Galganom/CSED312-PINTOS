@@ -82,7 +82,7 @@ process_execute (const char *file_name)
   return tid;
 }
 
-struct thread *
+struct child_process *
 process_get_child_by_tid (tid_t child_tid)
 {
   struct thread *cur = thread_current ();
@@ -91,10 +91,10 @@ process_get_child_by_tid (tid_t child_tid)
   for (e = list_begin (&cur->child_list); e != list_end (&cur->child_list);
        e = list_next (e))
     {
-      struct thread *t = list_entry (e, struct thread, child_elem);
-      if (t->tid == child_tid)
+      struct child_process *cp = list_entry (e, struct child_process, elem);
+      if (cp->tid == child_tid)
         {
-          return t;
+          return cp;
         }
     }
   
@@ -108,6 +108,7 @@ start_process (void *command_line_) // Renamed parameter for clarity
   char *command_line = command_line_; // Original command line copy from process_execute aux
   struct intr_frame if_;
   bool success;
+  struct child_process *cp = thread_current ()->child_info;
 
   /* === Argument Parsing Logic Added === */
   char *token, *save_ptr;
@@ -160,10 +161,11 @@ start_process (void *command_line_) // Renamed parameter for clarity
   // Load using the parsed program name (argv[0])
   success = load (prog_name, &if_.eip, &if_.esp);
 
-  // 1. load() 결과를 부모가 알 수 있도록 플래그에 기록
-  thread_current ()->load_success = success;
-  // 2. load가 끝났음을 exec()을 호출한 부모에게 알림 (부모를 깨움)
-  sema_up (&thread_current ()->sema_load_complete);
+  if (cp != NULL)
+    {
+      cp->load_success = success;
+      sema_up (&cp->load_sema);
+    }
 
   /* === Stack Construction Logic Added === */
   // If load succeeds, construct the user stack
@@ -257,34 +259,23 @@ construct_user_stack(int argc, char **argv, void **esp)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  // 1. tid를 이용해 내 자식 리스트에서 해당 자식 스레드를 찾습니다.
-  //    (이전에 추가한 process_get_child_by_tid 헬퍼 함수 사용)
-  struct thread *child_thread = process_get_child_by_tid (child_tid);
+  struct child_process *cp = process_get_child_by_tid (child_tid);
 
-  // 2. 자식이 아니거나, tid가 유효하지 않거나,
-  //    이미 wait한 자식인 경우 (리스트에서 제거됨) -1을 반환합니다.
-  if (child_thread == NULL)
-    {
-      return -1;
-    }
+  if (cp == NULL)
+    return -1;
 
-  // 3. 자식이 exit()을 호출할 때까지 대기합니다.
-  //    (자식이 thread_exit()에서 sema_wait_on_child를 'up'해줄 것입니다.)
-  sema_down (&child_thread->sema_wait_on_child);
+  if (cp->wait_called)
+    return -1;
 
-  // 4. 자식이 종료되었으므로, 자식이 저장한 종료 상태를 가져옵니다.
-  //    (자식은 `sema_up` 후 `struct thread`에 접근하지 않음을 보장합니다.)
-  int exit_status = child_thread->process_exit_status;
+  cp->wait_called = true;
 
-  // 5. 부모의 자식 리스트에서 해당 자식을 제거합니다.
-  //    (두 번 wait 하는 것을 방지하는 효과도 있습니다.)
-  list_remove (&child_thread->child_elem);
+  if (!cp->exited)
+    sema_down (&cp->wait_sema);
 
-  // 6. 부모가 자식의 'struct thread'를 직접 해제합니다.
-  //    이것이 바로 '책임 이전'입니다. 자식은 스스로를 해제하지 않습니다.
-  palloc_free_page (child_thread);
-
-  // 7. 가져온 종료 상태를 반환합니다.
+  int exit_status = cp->exit_status;
+  list_remove (&cp->elem);
+  cp->parent_alive = false;
+  free (cp);
   return exit_status;
 }
 
@@ -294,6 +285,7 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  struct list_elem *e;
 
   for(int i = 2; i < cur->fd_max; i++) 
   {
@@ -316,6 +308,17 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
+    }
+
+  while (!list_empty (&cur->child_list))
+    {
+      e = list_pop_front (&cur->child_list);
+      struct child_process *cp = list_entry (e, struct child_process, elem);
+      cp->parent_alive = false;
+      if (cp->exited)
+        free (cp);
+      else
+        cp->wait_called = true;
     }
 }
 
