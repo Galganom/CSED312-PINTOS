@@ -108,7 +108,24 @@ start_process (void *command_line_) // Renamed parameter for clarity
   char *command_line = command_line_; // Original command line copy from process_execute aux
   struct intr_frame if_;
   bool success;
-  struct child_process *cp = thread_current ()->child_info;
+  struct thread *cur = thread_current ();
+  struct child_process *cp = cur->child_info;
+
+  if (cur->fd_table == NULL)
+    {
+      cur->fd_table = palloc_get_page (PAL_ZERO);
+      if (cur->fd_table == NULL)
+        {
+          if (cp != NULL)
+            {
+              cp->load_success = false;
+              sema_up (&cp->load_sema);
+            }
+          palloc_free_page (command_line);
+          thread_exit ();
+        }
+      cur->fd_max = 2;
+    }
 
   /* === Argument Parsing Logic Added === */
   char *token, *save_ptr;
@@ -184,6 +201,12 @@ start_process (void *command_line_) // Renamed parameter for clarity
   /* If load failed, quit. */
   // Moved the check after freeing resources, before jumping
   if (!success) {
+      cur->fd_max = 0;
+      if (cur->fd_table != NULL)
+        {
+          palloc_free_page (cur->fd_table);
+          cur->fd_table = NULL;
+        }
       thread_exit (); 
   }
 
@@ -287,11 +310,16 @@ process_exit (void)
   uint32_t *pd;
   struct list_elem *e;
 
-  for(int i = 2; i < cur->fd_max; i++) 
-  {
-    close(i);
-  }
-  palloc_free_page(cur->fd_table);
+  if (cur->fd_table != NULL)
+    {
+      for (int i = 2; i < cur->fd_max; i++) 
+        {
+          close (i);
+        }
+      palloc_free_page (cur->fd_table);
+      cur->fd_table = NULL;
+    }
+  cur->fd_max = 0;
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
