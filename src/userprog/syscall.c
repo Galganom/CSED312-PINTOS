@@ -98,6 +98,30 @@ void is_valid_addr(void *addr) {
 		exit(-1);
 }
 
+static void
+validate_string (const char *str)
+{
+  // 포인터 주소 자체를 검사 (NULL 또는 커널 주소 등)
+  // is_valid_addr는 실패 시 exit(-1)을 호출
+  is_valid_addr((void *)str);
+
+  // 문자열의 끝(\0)을 만날 때까지 모든 바이트를 검사
+  // 페이지 경계를 넘어가는지(exec-bound-3) 확인
+  int i = 0;
+  while (true)
+    {
+      // (str + i) 주소가 유효한지 검사
+      is_valid_addr((void *)(str + i));
+      
+      // 해당 주소에서 값을 읽어와 \0인지 확인
+      if (*(str + i) == '\0')
+        {
+          break; // 문자열의 끝을 찾은 경우
+        }
+      i++;
+    }
+}
+
 void get_argument(void *esp, int *arg, int count) {
 	int i;
 	void* arg_pos;
@@ -314,6 +338,9 @@ int write (int fd, const void *buffer, unsigned size)
 tid_t
 user_exec (const char *cmd_line)
 {
+  
+  validate_string(cmd_line);
+  
   tid_t tid;
   struct child_process *cp;
 
