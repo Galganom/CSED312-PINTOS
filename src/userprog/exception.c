@@ -148,14 +148,34 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* To implement virtual memory, delete the rest of the function
+  
+  // 페이지 폴트가 사용자 모드에서 발생했을때 처리 추가
+  if (user)
+    {
+      // userprog의 잘못된 메모리에 접근시 처리
+      // syscall.c에 구현한 exit(-1)과 동일한 동작
+
+      // 1. 종료 상태를 -1로 기록합니다.
+      struct thread *cur = thread_current ();
+      cur->process_exit_status = -1;
+      
+      // 2. 요구사항에 따라 종료 메시지를 출력합니다.
+      printf ("%s: exit(%d)\n", cur->name, -1);
+      
+      // 3. 스레드(프로세스)를 종료합니다.
+      thread_exit ();
+    }
+   else
+    {
+      /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
+      printf ("Page fault at %p: %s error %s page in %s context.\n",
+               fault_addr,
+               not_present ? "not present" : "rights violation",
+               write ? "writing" : "reading",
+               user ? "user" : "kernel");
+      kill (f);
+    }
 }
 
