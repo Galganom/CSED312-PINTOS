@@ -18,9 +18,11 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
+#include "threads/synch.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+extern struct lock filesys_lock;
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -448,6 +450,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
+  bool filesys_lock_held = false;
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -455,7 +458,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
-  /* Open executable file. */
+  /* Open executable file under filesystem lock. */
+  lock_acquire (&filesys_lock);
+  filesys_lock_held = true;
   file = filesys_open (file_name);
   if (file == NULL) 
     {
@@ -546,7 +551,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  if (file != NULL)
+    file_close (file);
+  if (filesys_lock_held)
+    lock_release (&filesys_lock);
   return success;
 }
 

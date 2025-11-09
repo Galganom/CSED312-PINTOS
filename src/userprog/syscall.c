@@ -140,13 +140,19 @@ bool create(const char* file, unsigned initial_size)
   {
     exit(-1);
   }
-  return filesys_create(file, initial_size);
+  lock_acquire (&filesys_lock);
+  bool success = filesys_create (file, initial_size);
+  lock_release (&filesys_lock);
+  return success;
 }
 
 bool remove(const char* file)
 {
-  // 단순 삭제
-  return filesys_remove(file);
+  is_valid_addr ((void *) file);
+  lock_acquire (&filesys_lock);
+  bool success = filesys_remove (file);
+  lock_release (&filesys_lock);
+  return success;
 }
 
 struct file *process_get_file(int fd)
@@ -168,7 +174,10 @@ int filesize (int fd)
   f = process_get_file(fd);
   if(f)
   {
-    return file_length(f);
+    lock_acquire (&filesys_lock);
+    int length = file_length (f);
+    lock_release (&filesys_lock);
+    return length;
   }
   return -1;
 }
@@ -186,7 +195,9 @@ void seek (int fd, unsigned position)
   */
   struct file* f = process_get_file(fd);
   ASSERT(f != NULL);
+  lock_acquire (&filesys_lock);
   file_seek(f, position);
+  lock_release (&filesys_lock);
 }
 
 unsigned tell (int fd)
@@ -196,7 +207,10 @@ unsigned tell (int fd)
   struct file *f = process_get_file(fd);
   if (f)
   {
-    return file_tell(f);
+    lock_acquire (&filesys_lock);
+    unsigned position = file_tell (f);
+    lock_release (&filesys_lock);
+    return position;
   }
   else
   {
@@ -221,9 +235,11 @@ int open (const char *file)
 
  is_valid_addr((void*)file);
 
+ lock_acquire (&filesys_lock);
  f = filesys_open(file);
  if(f==NULL)
  {
+  lock_release (&filesys_lock);
   return -1;
  }
 
@@ -232,6 +248,7 @@ int open (const char *file)
  {
   file_deny_write(f);
  }
+ lock_release (&filesys_lock);
  
  /* add file to process */ 
  cur = thread_current();
@@ -252,7 +269,9 @@ void close (int fd)
   {
     if((fd>1) && (fd<thread_current()->fd_max))
     {
+      lock_acquire (&filesys_lock);
       file_close(f);
+      lock_release (&filesys_lock);
       thread_current()->fd_table[fd] = NULL;
     }
   }
