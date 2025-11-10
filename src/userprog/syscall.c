@@ -16,79 +16,86 @@ typedef int pid_t;
 unsigned tell(int fd);
 bool remove(const char* file);
 bool create(const char* file, unsigned initial_size);
-// void exit (int status);
 
 static void syscall_handler (struct intr_frame *);
 struct lock filesys_lock;
 
-void
-syscall_init (void) 
-{
+void syscall_init (void) {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&filesys_lock);
 }
 
-static void
-syscall_handler (struct intr_frame *f UNUSED) {
+static void syscall_handler (struct intr_frame *f UNUSED) {
 	is_valid_addr((void *)(f->esp));
 	for (int i = 0; i < 3; i++) 
     	is_valid_addr(f->esp + 4*i);
 
-	int argv[3];
+	int data[3];
 	switch(*(uint32_t *)(f->esp)) {
 		case SYS_HALT:
 			shutdown_power_off();
 			break;
 		case SYS_EXIT:
-			get_argument(f->esp+4, argv, 1);
-			exit((int)argv[0]);
+			read_esp(f->esp+4, data, 1);
+			exit((int)data[0]);
 			break;
 		case SYS_EXEC:
-			get_argument(f->esp+4, argv, 1);
-			f->eax = user_exec((const char*)argv[0]);
+			read_esp(f->esp+4, data, 1);
+			f->eax = user_exec((const char*)data[0]);
 			break;
 		case SYS_WAIT:
-			get_argument(f->esp+4, argv, 1);
-			f->eax = user_wait((pid_t)argv[0]);
+			read_esp(f->esp+4, data, 1);
+			f->eax = user_wait((pid_t)data[0]);
 			break;
 		case SYS_CREATE:
-			get_argument(f->esp+4, argv, 2);
-			f->eax = create((const char*)argv[0], (unsigned)argv[1]);
+			read_esp(f->esp+4, data, 2);
+			f->eax = create((const char*)data[0], (unsigned)data[1]);
 			break;
 		case SYS_REMOVE:
-			get_argument(f->esp+4, argv, 1);
-			f->eax = remove((const char*)argv[0]);
+			read_esp(f->esp+4, data, 1);
+			f->eax = remove((const char*)data[0]);
 			break;
 		case SYS_OPEN:
-			get_argument(f->esp+4, argv, 1);
-			f->eax = open((const char*)argv[0]);
+			read_esp(f->esp+4, data, 1);
+			f->eax = open((const char*)data[0]);
 			break;
 		case SYS_FILESIZE:
-			get_argument(f->esp+4, argv, 1);
-			f->eax = filesize((int)argv[0]);
+			read_esp(f->esp+4, data, 1);
+			f->eax = filesize((int)data[0]);
 			break;
 		case SYS_READ:
-			get_argument(f->esp+4, argv, 3);
-			f->eax = read((int)argv[0], (void *)argv[1], (unsigned)argv[2]);
+			read_esp(f->esp+4, data, 3);
+			f->eax = read((int)data[0], (void *)data[1], (unsigned)data[2]);
 			break;
 		case SYS_WRITE:
-			get_argument(f->esp+4, argv, 3);
-			f->eax = write((int)argv[0], (const void *)argv[1], (unsigned)argv[2]);
+			read_esp(f->esp+4, data, 3);
+			f->eax = write((int)data[0], (const void *)data[1], (unsigned)data[2]);
 			break;
 		case SYS_SEEK:
-			get_argument(f->esp+4, argv, 2);
-			seek((int)argv[0], (unsigned)argv[1]);
+			read_esp(f->esp+4, data, 2);
+			seek((int)data[0], (unsigned)data[1]);
 			break;
 		case SYS_TELL:
-			get_argument(f->esp+4, argv, 1);
-			f->eax = tell((int)argv[0]);
+			read_esp(f->esp+4, data, 1);
+			f->eax = tell((int)data[0]);
 			break;
 		case SYS_CLOSE:
-			get_argument(f->esp+4, argv, 1);
-			close((int)argv[0]);
+			read_esp(f->esp+4, data, 1);
+			close((int)data[0]);
 			break;
 		default:
 			exit(-1);
+	}
+}
+
+void read_esp(void *esp, int *data, int count) {
+	
+  void* pos;
+  int i;
+	for (i=0; i<count; i++) {
+		pos = esp + 4*i;
+		is_valid_addr(pos);
+		data[i] = *(int*)(pos);
 	}
 }
 
@@ -98,9 +105,7 @@ void is_valid_addr(void *addr) {
 		exit(-1);
 }
 
-static void
-validate_string (const char *str)
-{
+static void validate_string (const char *str) {
   // 포인터 주소 자체를 검사 (NULL 또는 커널 주소 등)
   // is_valid_addr는 실패 시 exit(-1)을 호출
   is_valid_addr((void *)str);
@@ -108,46 +113,29 @@ validate_string (const char *str)
   // 문자열의 끝(\0)을 만날 때까지 모든 바이트를 검사
   // 페이지 경계를 넘어가는지(exec-bound-3) 확인
   int i = 0;
-  while (true)
-    {
-      // (str + i) 주소가 유효한지 검사
-      is_valid_addr((void *)(str + i));
-      
-      // 해당 주소에서 값을 읽어와 \0인지 확인
-      if (*(str + i) == '\0')
-        {
-          break; // 문자열의 끝을 찾은 경우
-        }
-      i++;
+  while (true) {
+    // (str + i) 주소가 유효한지 검사
+    is_valid_addr((void *)(str + i));
+    
+    // 해당 주소에서 값을 읽어와 \0인지 확인
+    if (*(str + i) == '\0') {
+      break; // 문자열의 끝을 찾은 경우
     }
+    i++;
+  }
 }
 
-void get_argument(void *esp, int *arg, int count) {
-	int i;
-	void* arg_pos;
-	for (i=0; i<count; i++) {
-		arg_pos=esp + 4*i;
-		is_valid_addr(arg_pos);
-		arg[i] = *(int*)(arg_pos);
-	}
-}
-
-bool create(const char* file, unsigned initial_size)
-{ 
+bool create(const char* file, unsigned initial_size) {
   // initial_size 크기의 파일을 생성, 열지는 않음
   is_valid_addr((void*)file);
-  if(!file)
-  {
-    exit(-1);
-  }
+  if(!file) exit(-1);
   lock_acquire (&filesys_lock);
   bool success = filesys_create (file, initial_size);
   lock_release (&filesys_lock);
   return success;
 }
 
-bool remove(const char* file)
-{
+bool remove(const char* file) {
   is_valid_addr ((void *) file);
   lock_acquire (&filesys_lock);
   bool success = filesys_remove (file);
@@ -155,25 +143,21 @@ bool remove(const char* file)
   return success;
 }
 
-struct file *process_get_file(int fd)
-{
+struct file *process_get_file(int fd) {
   struct file *f;
 
-  if( (fd > 1) && (fd < thread_current()->fd_max) )
-  {
+  if( (fd > 1) && (fd < thread_current()->fd_max)) {
     f = thread_current()->fd_table[fd];
     return f;
   }
   return NULL; 
 }
 
-int filesize (int fd)
-{
+int filesize (int fd) {
   // 파일 크기 반환 (file descriptor값 입력 받음)
   struct file* f;
   f = process_get_file(fd);
-  if(f)
-  {
+  if(f) {
     lock_acquire (&filesys_lock);
     int length = file_length (f);
     lock_release (&filesys_lock);
@@ -182,17 +166,9 @@ int filesize (int fd)
   return -1;
 }
 
-void seek (int fd, unsigned position)
-{
-  /* 
-  Changes the next byte to be read or written in open file fd to position, expressed in bytes from the beginning of the file. 
-  (Thus, a position of 0 is the file’s start.)
-  A seek past the current end of a file is not an error. 
-  A later read obtains 0 bytes, indicating end of file.
-  A later write extends the file, filling any unwritten gap with zeros.
-  (However, in Pintos files have a fixed length until project 4 is complete, so writes past end of file will return an error.)
-  These semantics are implemented in the file system and do not require any special effort in system call implementation.
-  */
+void seek (int fd, unsigned position) {
+  // fd에 해당하는 파일의 현재 읽기/쓰기 위치를 옮기는 함수
+
   struct file* f = process_get_file(fd);
   ASSERT(f != NULL);
   lock_acquire (&filesys_lock);
@@ -200,75 +176,58 @@ void seek (int fd, unsigned position)
   lock_release (&filesys_lock);
 }
 
-unsigned tell (int fd)
-{
-  /* Returns the position of the next byte to be read or written in open file fd, expressed
-  in bytes from the beginning of the file. */
+unsigned tell (int fd) {
+  // fd에 해당하는 파일의 현재 읽기/쓰기 위치를 알려주는 함수
   struct file *f = process_get_file(fd);
-  if (f)
-  {
+  if (f) {
     lock_acquire (&filesys_lock);
     unsigned position = file_tell (f);
     lock_release (&filesys_lock);
     return position;
   }
-  else
-  {
+  else {
     return -1;
   }
 }
 
-int open (const char *file)
-{
-  /* Opens the file called file.
-  Returns a nonnegative integer handle called a “file descriptor” (fd), or -1 if the file could not be opened.
+int open (const char *file) {
+  // file을 열고 해당 file의 fd를 반환함. file을 열 수 없을 땐 -1을 반환함
+  // 각 프로세스는 fd table이 있음
 
-  Each process has an independent set of file descriptors.
-  File descriptors are not inherited by child processes.
-  
-  When a single file is opened more than once, whether by a single process or different processes, each open returns a new file descriptor.
-  Different file descriptors for a single file are closed independently in separate calls to close and they do not share a file position.
-  */
- int fd;
- struct file* f;
- struct thread* cur;
+  int fd;
+  struct file* f;
+  struct thread* cur;
 
- is_valid_addr((void*)file);
+  is_valid_addr((void*)file);
 
- lock_acquire (&filesys_lock);
- f = filesys_open(file);
- if(f==NULL)
- {
+  lock_acquire (&filesys_lock);
+  f = filesys_open(file);
+  if(f==NULL) {
+    lock_release (&filesys_lock);
+    return -1;
+  }
+
+  // 열린 파일에 쓰기 방지
+  if(!strcmp(thread_current()->name, file)) {
+    file_deny_write(f);
+  }
   lock_release (&filesys_lock);
-  return -1;
- }
 
- /* deny write */
- if(!strcmp(thread_current()->name, file))
- {
-  file_deny_write(f);
- }
- lock_release (&filesys_lock);
- 
- /* add file to process */ 
- cur = thread_current();
- fd = cur->fd_max;
+  // 함수의 입력 *file을 현재 프로세스의 fd에 추가
+  cur = thread_current();
+  fd = cur->fd_max;
 
- cur->fd_table[fd] = f;
- cur->fd_max++;
+  cur->fd_table[fd] = f;
+  cur->fd_max++;
 
- return fd;
+  return fd;
 }
 
-void close (int fd)
-{
-  /* Closes file descriptor fd. Exiting or terminating a process implicitly closes all its open
-  file descriptors, as if by calling this function for each one. */
+void close (int fd) {
+  // fd에 해당하는 파일을 닫고 fd를 NULL로 초기화함
   struct file *f = process_get_file(fd);
-  if(f)
-  {
-    if((fd>1) && (fd<thread_current()->fd_max))
-    {
+  if(f) {
+    if((fd>1) && (fd < thread_current()->fd_max)) {
       lock_acquire (&filesys_lock);
       file_close(f);
       lock_release (&filesys_lock);
@@ -277,36 +236,30 @@ void close (int fd)
   }
 }
 
-int read (int fd, void *buffer, unsigned size)
-{
- /* Reads size bytes from the file open as fd into buffer. 
-  Returns the number of bytes actually read (0 at end of file), or -1 if the file could not be read (due to a condition other than end of file).
-  Fd 0 reads from the keyboard using input_getc(). */
+int read (int fd, void *buffer, unsigned size) {
+  // fd에 해당하는 파일을 최대 size byte 만큼 읽고 buffer에 채워넣음, 실제로 읽은 byte 수를 return함
+  // return -1: 읽기 에러, 0: EOF, 1 이상: 해당 byte만큼 file을 읽음
+
   int bytes_read=0;
   struct file *f;
   unsigned i;
-  for (i = 0; i < size; i++)
-    is_valid_addr(buffer+i);
 
-  if(fd==0)
-  {
-    for (i = 0; i < size;i++)
-    {
+  for (i = 0; i < size; i++) {
+    is_valid_addr(buffer+i);
+  }
+
+  if(fd==0) {
+    for (i = 0; i < size;i++) {
       ((char*)buffer)[i]=input_getc();
       if(((char*)buffer)[i] == '\0')
-      {
         break;
-      }
       bytes_read = i;
     }
   }
-  else if(fd > 0)
-  {
+  else if(fd > 0) {
     f = process_get_file(fd);
     if(!f)
-    {
       return -1;
-    }
     lock_acquire(&filesys_lock);
     bytes_read = file_read(f, buffer, size);
     lock_release(&filesys_lock);
@@ -314,43 +267,32 @@ int read (int fd, void *buffer, unsigned size)
   return bytes_read;
 }
 
-int write (int fd, const void *buffer, unsigned size)
-{
-  /* Writes size bytes from buffer to the open file fd.
-  Returns the number of bytes actually written, which may be less than size if some bytes could not be written.
+int write (int fd, const void *buffer, unsigned size) {
+  // fd에 해당하는 파일을 최대 size 만큼 쓰고, 실제로 쓰기를 한 byte 만큼 반환함
   
-  The expected behavior is to write as many bytes as possible up to end-of-file and return the actual number written,
-  or 0 if no bytes could be written at all.
-  
-  Fd 1 writes to the console -> should write all of buffer in one call to putbuf()
-  */
-  
- int bytes_write = 0;
- struct file* f;
- unsigned i;
-  for (i = 0; i < size; i++)
-    is_valid_addr(buffer+i);
+  int bytes_write = 0;
+  struct file* f;
+  unsigned i;
 
- if(fd == 1)
- {
-  lock_acquire(&filesys_lock);
-  putbuf(buffer, size);
-  lock_release(&filesys_lock);
-  return size;
- }
- else if(fd > 1)
- {
-  f = process_get_file(fd);
+  for (i = 0; i < size; i++) {
+    is_valid_addr(buffer+i);
+  }
+
+  if(fd == 1) {
+    lock_acquire(&filesys_lock);
+    putbuf(buffer, size);
+    lock_release(&filesys_lock);
+    return size;
+  }
+  else if(fd > 1) {
+    f = process_get_file(fd);
     if(!f)
-    {
       return -1;
-    }
     lock_acquire(&filesys_lock);
     bytes_write = file_write(f, buffer, size);
     lock_release(&filesys_lock);
- }
- return bytes_write;
-
+  }
+  return bytes_write;
 }
 
 //-----------------------형찬---------------------------------

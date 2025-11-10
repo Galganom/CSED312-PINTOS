@@ -1,0 +1,255 @@
+--- [ Cleaning... ] ---
+for d in src doc tests; do make -C $d clean; done
+make[1]: Entering directory '/home/user/pintos/src'
+for d in threads userprog vm filesys examples utils; do make -C $d clean; done
+make[2]: Entering directory '/home/user/pintos/src/threads'
+rm -rf build
+make[2]: Leaving directory '/home/user/pintos/src/threads'
+make[2]: Entering directory '/home/user/pintos/src/userprog'
+rm -rf build
+make[2]: Leaving directory '/home/user/pintos/src/userprog'
+make[2]: Entering directory '/home/user/pintos/src/vm'
+rm -rf build
+make[2]: Leaving directory '/home/user/pintos/src/vm'
+make[2]: Entering directory '/home/user/pintos/src/filesys'
+rm -rf build
+make[2]: Leaving directory '/home/user/pintos/src/filesys'
+make[2]: Entering directory '/home/user/pintos/src/examples'
+rm -f cat cmp cp echo halt hex-dump ls mcat mcp mkdir pwd rm shell bubsort lineup matmult recursor cat.o cmp.o cp.o echo.o halt.o hex-dump.o ls.o mcat.o mcp.o mkdir.o pwd.o rm.o shell.o bubsort.o lineup.o matmult.o recursor.o cat.d cmp.d cp.d echo.d halt.d hex-dump.d ls.d mcat.d mcp.d mkdir.d pwd.d rm.d shell.d bubsort.d lineup.d matmult.d recursor.d
+rm -f lib/debug.d lib/random.d lib/stdio.d lib/stdlib.d lib/string.d lib/arithmetic.d lib/ustar.d lib/user/debug.d lib/user/syscall.d lib/user/console.d lib/debug.o lib/random.o lib/stdio.o lib/stdlib.o lib/string.o lib/arithmetic.o lib/ustar.o lib/user/debug.o lib/user/syscall.o lib/user/console.o lib/user/entry.[do] libc.a 
+make[2]: Leaving directory '/home/user/pintos/src/examples'
+make[2]: Entering directory '/home/user/pintos/src/utils'
+rm -f *.o setitimer-helper squish-pty squish-unix
+make[2]: Leaving directory '/home/user/pintos/src/utils'
+rm -f TAGS tags
+make[1]: Leaving directory '/home/user/pintos/src'
+make[1]: Entering directory '/home/user/pintos/doc'
+rm -f *.info* *.html
+rm -f *.dvi *.pdf *.ps *.log *~
+rm -rf WWW
+rm -f sample.tmpl.texi
+make[1]: Leaving directory '/home/user/pintos/doc'
+make[1]: Entering directory '/home/user/pintos/tests'
+rm -rf examples threads p1 userprog p2 vm p3 filesys p4
+make[1]: Leaving directory '/home/user/pintos/tests'
+--- [ Building... ] ---
+This makefile has only 'clean' and 'check' targets.
+--- [ Running test 0/100 with SEED=0 ] ---
+make -C tests check
+make[1]: Entering directory '/home/user/pintos/tests'
+make -C .. distclean
+make[2]: Entering directory '/home/user/pintos'
+for d in src doc tests; do make -C $d clean; done
+make[3]: Entering directory '/home/user/pintos/src'
+for d in threads userprog vm filesys examples utils; do make -C $d clean; done
+make[4]: Entering directory '/home/user/pintos/src/threads'
+rm -rf build
+make[4]: Leaving directory '/home/user/pintos/src/threads'
+make[4]: Entering directory '/home/user/pintos/src/userprog'
+rm -rf build
+make[4]: Leaving directory '/home/user/pintos/src/userprog'
+make[4]: Entering directory '/home/user/pintos/src/vm'
+rm -rf build
+make[4]: Leaving directory '/home/user/pintos/src/vm'
+make[4]: Entering directory '/home/user/pintos/src/filesys'
+rm -rf build
+make[4]: Leaving directory '/home/user/pintos/src/filesys'
+make[4]: Entering directory '/home/user/pintos/src/examples'
+rm -f cat cmp cp echo halt hex-dump ls mcat mcp mkdir pwd rm shell bubsort lineup matmult recursor cat.o cmp.o cp.o echo.o halt.o hex-dump.o ls.o mcat.o mcp.o mkdir.o pwd.o rm.o shell.o bubsort.o lineup.o matmult.o recursor.o cat.d cmp.d cp.d echo.d halt.d hex-dump.d ls.d mcat.d mcp.d mkdir.d pwd.d rm.d shell.d bubsort.d lineup.d matmult.d recursor.d
+rm -f lib/debug.d lib/random.d lib/stdio.d lib/stdlib.d lib/string.d lib/arithmetic.d lib/ustar.d lib/user/debug.d lib/user/syscall.d lib/user/console.d lib/debug.o lib/random.o lib/stdio.o lib/stdlib.o lib/string.o lib/arithmetic.o lib/ustar.o lib/user/debug.o lib/user/syscall.o lib/user/console.o lib/user/entry.[do] libc.a 
+make[4]: Leaving directory '/home/user/pintos/src/examples'
+make[4]: Entering directory '/home/user/pintos/src/utils'
+rm -f *.o setitimer-helper squish-pty squish-unix
+make[4]: Leaving directory '/home/user/pintos/src/utils'
+rm -f TAGS tags
+make[3]: Leaving directory '/home/user/pintos/src'
+make[3]: Entering directory '/home/user/pintos/doc'
+rm -f *.info* *.html
+rm -f *.dvi *.pdf *.ps *.log *~
+rm -rf WWW
+rm -f sample.tmpl.texi
+make[3]: Leaving directory '/home/user/pintos/doc'
+make[3]: Entering directory '/home/user/pintos/tests'
+rm -rf examples threads p1 userprog p2 vm p3 filesys p4
+make[3]: Leaving directory '/home/user/pintos/tests'
+find . -name '*~' -exec rm '{}' \;
+make[2]: Leaving directory '/home/user/pintos'
+for d in examples threads p1 userprog p2 vm p3 filesys p4; do make $d || exit 1; done
+make[2]: Entering directory '/home/user/pintos/tests'
+rm -rf examples && mkdir examples && cp -R ../src examples/src
+cd examples/src && make -s clean
+make[3]: Entering directory '/home/user/pintos/tests/examples/src'
+make[4]: Entering directory '/home/user/pintos/tests/examples/src/threads'
+make[4]: Leaving directory '/home/user/pintos/tests/examples/src/threads'
+make[4]: Entering directory '/home/user/pintos/tests/examples/src/userprog'
+make[4]: Leaving directory '/home/user/pintos/tests/examples/src/userprog'
+make[4]: Entering directory '/home/user/pintos/tests/examples/src/vm'
+make[4]: Leaving directory '/home/user/pintos/tests/examples/src/vm'
+make[4]: Entering directory '/home/user/pintos/tests/examples/src/filesys'
+make[4]: Leaving directory '/home/user/pintos/tests/examples/src/filesys'
+make[4]: Entering directory '/home/user/pintos/tests/examples/src/examples'
+make[4]: Leaving directory '/home/user/pintos/tests/examples/src/examples'
+make[4]: Entering directory '/home/user/pintos/tests/examples/src/utils'
+make[4]: Leaving directory '/home/user/pintos/tests/examples/src/utils'
+make[3]: Leaving directory '/home/user/pintos/tests/examples/src'
+cd examples/src/examples && make
+make[3]: Entering directory '/home/user/pintos/tests/examples/src/examples'
+gcc -m32 -c cat.c -o cat.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF cat.d
+gcc -m32 -c ../lib/user/entry.c -o lib/user/entry.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/user/entry.d
+gcc -m32 -c ../lib/debug.c -o lib/debug.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/debug.d
+gcc -m32 -c ../lib/random.c -o lib/random.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/random.d
+gcc -m32 -c ../lib/stdio.c -o lib/stdio.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/stdio.d
+gcc -m32 -c ../lib/stdlib.c -o lib/stdlib.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/stdlib.d
+gcc -m32 -c ../lib/string.c -o lib/string.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/string.d
+gcc -m32 -c ../lib/arithmetic.c -o lib/arithmetic.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/arithmetic.d
+gcc -m32 -c ../lib/ustar.c -o lib/ustar.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/ustar.d
+gcc -m32 -c ../lib/user/debug.c -o lib/user/debug.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/user/debug.d
+gcc -m32 -c ../lib/user/syscall.c -o lib/user/syscall.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/user/syscall.d
+gcc -m32 -c ../lib/user/console.c -o lib/user/console.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/user/console.d
+rm -f libc.a
+ar r libc.a lib/debug.o lib/random.o lib/stdio.o lib/stdlib.o lib/string.o lib/arithmetic.o lib/ustar.o lib/user/debug.o lib/user/syscall.o lib/user/console.o
+ranlib libc.a
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds cat.o lib/user/entry.o libc.a -o cat
+gcc -m32 -c cmp.c -o cmp.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF cmp.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds cmp.o lib/user/entry.o libc.a -o cmp
+gcc -m32 -c cp.c -o cp.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF cp.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds cp.o lib/user/entry.o libc.a -o cp
+gcc -m32 -c echo.c -o echo.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF echo.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds echo.o lib/user/entry.o libc.a -o echo
+gcc -m32 -c halt.c -o halt.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF halt.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds halt.o lib/user/entry.o libc.a -o halt
+gcc -m32 -c hex-dump.c -o hex-dump.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF hex-dump.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds hex-dump.o lib/user/entry.o libc.a -o hex-dump
+gcc -m32 -c ls.c -o ls.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF ls.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds ls.o lib/user/entry.o libc.a -o ls
+gcc -m32 -c mcat.c -o mcat.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF mcat.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds mcat.o lib/user/entry.o libc.a -o mcat
+gcc -m32 -c mcp.c -o mcp.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF mcp.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds mcp.o lib/user/entry.o libc.a -o mcp
+gcc -m32 -c mkdir.c -o mkdir.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF mkdir.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds mkdir.o lib/user/entry.o libc.a -o mkdir
+gcc -m32 -c pwd.c -o pwd.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF pwd.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds pwd.o lib/user/entry.o libc.a -o pwd
+gcc -m32 -c rm.c -o rm.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF rm.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds rm.o lib/user/entry.o libc.a -o rm
+gcc -m32 -c shell.c -o shell.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF shell.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds shell.o lib/user/entry.o libc.a -o shell
+gcc -m32 -c bubsort.c -o bubsort.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF bubsort.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds bubsort.o lib/user/entry.o libc.a -o bubsort
+gcc -m32 -c lineup.c -o lineup.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lineup.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds lineup.o lib/user/entry.o libc.a -o lineup
+gcc -m32 -c matmult.c -o matmult.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF matmult.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds matmult.o lib/user/entry.o libc.a -o matmult
+gcc -m32 -c recursor.c -o recursor.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I.. -I../lib -I../lib/user -I. -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF recursor.d
+gcc -m32 -z noseparate-code -Wl,--build-id=none -nostdlib -static -Wl,-T,../lib/user/user.lds recursor.o lib/user/entry.o libc.a -o recursor
+make[3]: Leaving directory '/home/user/pintos/tests/examples/src/examples'
+rm -rf examples
+make[2]: Leaving directory '/home/user/pintos/tests'
+make[2]: Entering directory '/home/user/pintos/tests'
+rm -rf threads && mkdir threads && cp -R ../src threads/src
+cd threads/src && make -s clean
+make[3]: Entering directory '/home/user/pintos/tests/threads/src'
+make[4]: Entering directory '/home/user/pintos/tests/threads/src/threads'
+make[4]: Leaving directory '/home/user/pintos/tests/threads/src/threads'
+make[4]: Entering directory '/home/user/pintos/tests/threads/src/userprog'
+make[4]: Leaving directory '/home/user/pintos/tests/threads/src/userprog'
+make[4]: Entering directory '/home/user/pintos/tests/threads/src/vm'
+make[4]: Leaving directory '/home/user/pintos/tests/threads/src/vm'
+make[4]: Entering directory '/home/user/pintos/tests/threads/src/filesys'
+make[4]: Leaving directory '/home/user/pintos/tests/threads/src/filesys'
+make[4]: Entering directory '/home/user/pintos/tests/threads/src/examples'
+make[4]: Leaving directory '/home/user/pintos/tests/threads/src/examples'
+make[4]: Entering directory '/home/user/pintos/tests/threads/src/utils'
+make[4]: Leaving directory '/home/user/pintos/tests/threads/src/utils'
+make[3]: Leaving directory '/home/user/pintos/tests/threads/src'
+cd threads/src/threads && make
+make[3]: Entering directory '/home/user/pintos/tests/threads/src/threads'
+mkdir -p build/devices
+mkdir -p build/lib
+mkdir -p build/lib/kernel
+mkdir -p build/lib/user
+mkdir -p build/tests/threads
+mkdir -p build/threads
+cp ../Makefile.build build/Makefile
+cd build && make all
+make[4]: Entering directory '/home/user/pintos/tests/threads/src/threads/build'
+gcc -m32 -E -nostdinc -I../.. -I../../lib -I../../lib/kernel -P ../../threads/kernel.lds.S > threads/kernel.lds.s
+gcc -m32 -c ../../threads/start.S -o threads/start.o -Wa,--gstabs -nostdinc -I../.. -I../../lib -I../../lib/kernel  -MMD -MF threads/start.d
+gcc -m32 -c ../../threads/init.c -o threads/init.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF threads/init.d
+gcc -m32 -c ../../threads/thread.c -o threads/thread.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF threads/thread.d
+gcc -m32 -c ../../threads/switch.S -o threads/switch.o -Wa,--gstabs -nostdinc -I../.. -I../../lib -I../../lib/kernel  -MMD -MF threads/switch.d
+gcc -m32 -c ../../threads/interrupt.c -o threads/interrupt.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF threads/interrupt.d
+gcc -m32 -c ../../threads/intr-stubs.S -o threads/intr-stubs.o -Wa,--gstabs -nostdinc -I../.. -I../../lib -I../../lib/kernel  -MMD -MF threads/intr-stubs.d
+gcc -m32 -c ../../threads/synch.c -o threads/synch.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF threads/synch.d
+gcc -m32 -c ../../threads/palloc.c -o threads/palloc.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF threads/palloc.d
+gcc -m32 -c ../../threads/malloc.c -o threads/malloc.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF threads/malloc.d
+gcc -m32 -c ../../devices/pit.c -o devices/pit.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF devices/pit.d
+gcc -m32 -c ../../devices/timer.c -o devices/timer.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF devices/timer.d
+gcc -m32 -c ../../devices/kbd.c -o devices/kbd.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF devices/kbd.d
+gcc -m32 -c ../../devices/vga.c -o devices/vga.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF devices/vga.d
+gcc -m32 -c ../../devices/serial.c -o devices/serial.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF devices/serial.d
+gcc -m32 -c ../../devices/block.c -o devices/block.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF devices/block.d
+gcc -m32 -c ../../devices/partition.c -o devices/partition.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF devices/partition.d
+gcc -m32 -c ../../devices/ide.c -o devices/ide.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF devices/ide.d
+gcc -m32 -c ../../devices/input.c -o devices/input.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF devices/input.d
+gcc -m32 -c ../../devices/intq.c -o devices/intq.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF devices/intq.d
+gcc -m32 -c ../../devices/rtc.c -o devices/rtc.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF devices/rtc.d
+gcc -m32 -c ../../devices/shutdown.c -o devices/shutdown.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF devices/shutdown.d
+gcc -m32 -c ../../devices/speaker.c -o devices/speaker.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF devices/speaker.d
+gcc -m32 -c ../../lib/debug.c -o lib/debug.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/debug.d
+gcc -m32 -c ../../lib/random.c -o lib/random.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/random.d
+gcc -m32 -c ../../lib/stdio.c -o lib/stdio.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/stdio.d
+gcc -m32 -c ../../lib/stdlib.c -o lib/stdlib.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/stdlib.d
+gcc -m32 -c ../../lib/string.c -o lib/string.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/string.d
+gcc -m32 -c ../../lib/arithmetic.c -o lib/arithmetic.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/arithmetic.d
+gcc -m32 -c ../../lib/ustar.c -o lib/ustar.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/ustar.d
+gcc -m32 -c ../../lib/kernel/debug.c -o lib/kernel/debug.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/kernel/debug.d
+gcc -m32 -c ../../lib/kernel/list.c -o lib/kernel/list.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/kernel/list.d
+gcc -m32 -c ../../lib/kernel/bitmap.c -o lib/kernel/bitmap.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/kernel/bitmap.d
+gcc -m32 -c ../../lib/kernel/hash.c -o lib/kernel/hash.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/kernel/hash.d
+gcc -m32 -c ../../lib/kernel/console.c -o lib/kernel/console.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF lib/kernel/console.d
+gcc -m32 -c ../../tests/threads/tests.c -o tests/threads/tests.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/tests.d
+gcc -m32 -c ../../tests/threads/alarm-wait.c -o tests/threads/alarm-wait.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/alarm-wait.d
+gcc -m32 -c ../../tests/threads/alarm-simultaneous.c -o tests/threads/alarm-simultaneous.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/alarm-simultaneous.d
+gcc -m32 -c ../../tests/threads/alarm-priority.c -o tests/threads/alarm-priority.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/alarm-priority.d
+gcc -m32 -c ../../tests/threads/alarm-zero.c -o tests/threads/alarm-zero.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/alarm-zero.d
+gcc -m32 -c ../../tests/threads/alarm-negative.c -o tests/threads/alarm-negative.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/alarm-negative.d
+gcc -m32 -c ../../tests/threads/priority-change.c -o tests/threads/priority-change.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/priority-change.d
+gcc -m32 -c ../../tests/threads/priority-donate-one.c -o tests/threads/priority-donate-one.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/priority-donate-one.d
+gcc -m32 -c ../../tests/threads/priority-donate-multiple.c -o tests/threads/priority-donate-multiple.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/priority-donate-multiple.d
+gcc -m32 -c ../../tests/threads/priority-donate-multiple2.c -o tests/threads/priority-donate-multiple2.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/priority-donate-multiple2.d
+gcc -m32 -c ../../tests/threads/priority-donate-nest.c -o tests/threads/priority-donate-nest.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/priority-donate-nest.d
+gcc -m32 -c ../../tests/threads/priority-donate-sema.c -o tests/threads/priority-donate-sema.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/priority-donate-sema.d
+gcc -m32 -c ../../tests/threads/priority-donate-lower.c -o tests/threads/priority-donate-lower.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/priority-donate-lower.d
+gcc -m32 -c ../../tests/threads/priority-fifo.c -o tests/threads/priority-fifo.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/priority-fifo.d
+gcc -m32 -c ../../tests/threads/priority-preempt.c -o tests/threads/priority-preempt.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/priority-preempt.d
+gcc -m32 -c ../../tests/threads/priority-sema.c -o tests/threads/priority-sema.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/priority-sema.d
+gcc -m32 -c ../../tests/threads/priority-condvar.c -o tests/threads/priority-condvar.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/priority-condvar.d
+gcc -m32 -c ../../tests/threads/priority-donate-chain.c -o tests/threads/priority-donate-chain.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/priority-donate-chain.d
+gcc -m32 -c ../../tests/threads/mlfqs-load-1.c -o tests/threads/mlfqs-load-1.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/mlfqs-load-1.d
+gcc -m32 -c ../../tests/threads/mlfqs-load-60.c -o tests/threads/mlfqs-load-60.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/mlfqs-load-60.d
+gcc -m32 -c ../../tests/threads/mlfqs-load-avg.c -o tests/threads/mlfqs-load-avg.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/mlfqs-load-avg.d
+gcc -m32 -c ../../tests/threads/mlfqs-recent-1.c -o tests/threads/mlfqs-recent-1.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/mlfqs-recent-1.d
+gcc -m32 -c ../../tests/threads/mlfqs-fair.c -o tests/threads/mlfqs-fair.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/mlfqs-fair.d
+gcc -m32 -c ../../tests/threads/mlfqs-block.c -o tests/threads/mlfqs-block.o -g -msoft-float -O -march=i686 -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers  -MMD -MF tests/threads/mlfqs-block.d
+ld -melf_i386 -T threads/kernel.lds.s -o kernel.o threads/start.o threads/init.o threads/thread.o threads/switch.o threads/interrupt.o threads/intr-stubs.o threads/synch.o threads/palloc.o threads/malloc.o devices/pit.o devices/timer.o devices/kbd.o devices/vga.o devices/serial.o devices/block.o devices/partition.o devices/ide.o devices/input.o devices/intq.o devices/rtc.o devices/shutdown.o devices/speaker.o lib/debug.o lib/random.o lib/stdio.o lib/stdlib.o lib/string.o lib/arithmetic.o lib/ustar.o lib/kernel/debug.o lib/kernel/list.o lib/kernel/bitmap.o lib/kernel/hash.o lib/kernel/console.o tests/threads/tests.o tests/threads/alarm-wait.o tests/threads/alarm-simultaneous.o tests/threads/alarm-priority.o tests/threads/alarm-zero.o tests/threads/alarm-negative.o tests/threads/priority-change.o tests/threads/priority-donate-one.o tests/threads/priority-donate-multiple.o tests/threads/priority-donate-multiple2.o tests/threads/priority-donate-nest.o tests/threads/priority-donate-sema.o tests/threads/priority-donate-lower.o tests/threads/priority-fifo.o tests/threads/priority-preempt.o tests/threads/priority-sema.o tests/threads/priority-condvar.o tests/threads/priority-donate-chain.o tests/threads/mlfqs-load-1.o tests/threads/mlfqs-load-60.o tests/threads/mlfqs-load-avg.o tests/threads/mlfqs-recent-1.o tests/threads/mlfqs-fair.o tests/threads/mlfqs-block.o
+objcopy -R .note -R .comment -S kernel.o kernel.bin
+gcc -m32 -c ../../threads/loader.S -o threads/loader.o -Wa,--gstabs -nostdinc -I../.. -I../../lib 
+ld -melf_i386 -N -e 0 -Ttext 0x7c00 --oformat binary -o loader.bin threads/loader.o
+make[4]: Leaving directory '/home/user/pintos/tests/threads/src/threads/build'
+make[3]: Leaving directory '/home/user/pintos/tests/threads/src/threads'
+cd threads/src/threads && time make check TESTS=tests/threads/alarm-single
+make[3]: Entering directory '/home/user/pintos/tests/threads/src/threads'
+cd build && make check
+make[4]: Entering directory '/home/user/pintos/tests/threads/src/threads/build'
+pintos -v -k -T 60 --bochs  -- -q  run alarm-single < /dev/null 2> tests/threads/alarm-single.errors > tests/threads/alarm-single.output
+perl -I../.. ../../tests/threads/alarm-single.ck tests/threads/alarm-single tests/threads/alarm-single.result
+FAIL tests/threads/alarm-single
+Run didn't start up properly: no "Pintos booting" message
+FAIL tests/threads/alarm-single
+1 of 1 tests failed.
+make[4]: Leaving directory '/home/user/pintos/tests/threads/src/threads/build'
+make[3]: Leaving directory '/home/user/pintos/tests/threads/src/threads'
+make[2]: Leaving directory '/home/user/pintos/tests'
+make[1]: Leaving directory '/home/user/pintos/tests'
+for ((i=32; i<=32; i++)); do echo --- [ Cleaning... ] ---; make clean; echo --- [ Building... ] ---; make; echo --- [ Running test 0/100 with SEED=0 ] ---; if ! make check SEED=0; then echo make clean
