@@ -312,6 +312,15 @@ process_exit (void)
   uint32_t *pd;
   struct list_elem *e;
 
+  if (cur->cur_file != NULL)
+    {
+      lock_acquire (&filesys_lock);
+      file_allow_write (cur->cur_file);
+      file_close (cur->cur_file);
+      lock_release (&filesys_lock);
+      cur->cur_file = NULL;
+    }
+
   if (cur->fd_table != NULL)
     {
       for (int i = 2; i < cur->fd_max; i++) 
@@ -451,6 +460,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   bool success = false;
   int i;
   bool filesys_lock_held = false;
+  bool exec_file_locked = false;
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -467,6 +477,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
+  file_deny_write (file);
+  exec_file_locked = true;
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -548,11 +561,17 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
+  t->cur_file = file;
+  file = NULL;
 
  done:
   /* We arrive here whether the load is successful or not. */
   if (file != NULL)
-    file_close (file);
+    {
+      if (exec_file_locked)
+        file_allow_write (file);
+      file_close (file);
+    }
   if (filesys_lock_held)
     lock_release (&filesys_lock);
   return success;
