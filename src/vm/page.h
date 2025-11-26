@@ -2,6 +2,7 @@
 #define VM_PAGE_H
 
 #include <hash.h>
+#include <list.h>
 #include "devices/block.h"
 #include "filesys/off_t.h"
 #include "threads/synch.h"
@@ -33,6 +34,20 @@ struct vm_entry {
 
     /* Hash Table 관리를 위한 요소 */
     struct hash_elem elem;  
+};
+
+/* Memory Mapped File 관리를 위한 구조체 */
+struct mmap_file {
+    int mapid;                  /* 매핑 ID */
+    struct file *file;          /* mmap된 파일 (reopen된 파일 포인터) */
+    struct list_elem elem;      /* mmap_list 연결용 */
+    struct list vme_list;       /* 이 mmap에 속한 vm_entry 리스트 */
+};
+
+/* mmap_file의 vme_list에 연결되는 요소 */
+struct mmap_vme {
+    struct vm_entry *vme;       /* vm_entry 포인터 */
+    struct list_elem elem;      /* vme_list 연결용 */
 };
 
 /* SPT 관리 함수 선언 (B 담당) */

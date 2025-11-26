@@ -95,3 +95,19 @@ swap_out (void *kaddr)
     lock_release (&swap_lock);
     return free_index;
 }
+
+/* 스왑 슬롯 해제 (프로세스 종료 시 사용) */
+void 
+swap_free (size_t used_index) 
+{
+    lock_acquire (&swap_lock);
+
+    ASSERT (swap_block != NULL);
+    ASSERT (used_index < bitmap_size (swap_bitmap));
+    ASSERT (bitmap_test (swap_bitmap, used_index) == true);
+
+    /* 비트맵에서 해당 슬롯을 free로 표시 */
+    bitmap_reset (swap_bitmap, used_index);
+
+    lock_release (&swap_lock);
+}

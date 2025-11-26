@@ -12,4 +12,7 @@ void swap_in (size_t used_index, void *kaddr);
 /* kaddr의 데이터를 스왑 영역에 저장하고 인덱스 반환 */
 size_t swap_out (void *kaddr);
 
+/* 스왑 슬롯 해제 (프로세스 종료 시 사용) */
+void swap_free (size_t used_index);
+
 #endif /* vm/swap.h */

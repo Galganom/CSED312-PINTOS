@@ -118,6 +118,10 @@ struct thread
 #ifdef VM
     /* Virtual Memory - Supplemental Page Table */
     struct hash vm;                     /* 해시 테이블로 구현된 SPT */
+    
+    /* Memory Mapped Files */
+    struct list mmap_list;              /* mmap된 파일들의 리스트 */
+    int next_mapid;                     /* 다음 mmap ID */
 #endif
 
     /* Owned by thread.c. */

@@ -12,10 +12,24 @@
 #include "userprog/process.h"
 #include <string.h>
 
+#ifdef VM
+#include "vm/page.h"
+#include "vm/frame.h"
+#include "userprog/pagedir.h"
+#include "threads/malloc.h"
+#endif
+
 typedef int pid_t;
+typedef int mapid_t;
+
 unsigned tell(int fd);
 bool remove(const char* file);
 bool create(const char* file, unsigned initial_size);
+
+#ifdef VM
+mapid_t mmap (int fd, void *addr);
+void munmap (mapid_t mapid);
+#endif
 
 static void syscall_handler (struct intr_frame *);
 struct lock filesys_lock;
@@ -83,6 +97,16 @@ static void syscall_handler (struct intr_frame *f UNUSED) {
 			read_esp(f->esp+4, data, 1);
 			close((int)data[0]);
 			break;
+#ifdef VM
+		case SYS_MMAP:
+			read_esp(f->esp+4, data, 2);
+			f->eax = mmap((int)data[0], (void *)data[1]);
+			break;
+		case SYS_MUNMAP:
+			read_esp(f->esp+4, data, 1);
+			munmap((mapid_t)data[0]);
+			break;
+#endif
 		default:
 			exit(-1);
 	}
@@ -359,3 +383,212 @@ void exit (int status)
   // 3. 실제 스레드 종료 및 부모를 깨우는 절차를 시작합니다.
   thread_exit ();
 }
+
+#ifdef VM
+/* mmap: 파일을 메모리에 매핑 */
+mapid_t 
+mmap (int fd, void *addr)
+{
+  struct thread *cur = thread_current ();
+  struct file *file;
+  struct file *reopened_file;
+  off_t file_len;
+  off_t ofs = 0;
+  
+  /* 1. 유효성 검사 */
+  /* addr이 NULL이거나 페이지 정렬되지 않은 경우 */
+  if (addr == NULL || pg_ofs (addr) != 0)
+    return -1;
+  
+  /* fd가 STDIN(0) 또는 STDOUT(1)인 경우 */
+  if (fd == 0 || fd == 1)
+    return -1;
+    
+  /* addr이 0인 경우 (주소 0에 매핑 금지) */
+  if (addr == 0)
+    return -1;
+
+  /* 파일 가져오기 */
+  file = process_get_file (fd);
+  if (file == NULL)
+    return -1;
+  
+  /* 파일 길이가 0인 경우 */
+  lock_acquire (&filesys_lock);
+  file_len = file_length (file);
+  lock_release (&filesys_lock);
+  
+  if (file_len == 0)
+    return -1;
+  
+  /* 2. 매핑할 주소 범위에 기존 매핑이 있는지 확인 */
+  off_t remaining = file_len;
+  void *check_addr = addr;
+  while (remaining > 0)
+    {
+      if (find_vme (check_addr) != NULL)
+        return -1;  /* 이미 매핑된 페이지가 있음 */
+      check_addr += PGSIZE;
+      remaining -= PGSIZE;
+    }
+  
+  /* 3. 파일 복제 (file_reopen) - close(fd) 후에도 매핑 유지 */
+  lock_acquire (&filesys_lock);
+  reopened_file = file_reopen (file);
+  lock_release (&filesys_lock);
+  
+  if (reopened_file == NULL)
+    return -1;
+  
+  /* 4. mmap_file 구조체 생성 */
+  struct mmap_file *mf = malloc (sizeof (struct mmap_file));
+  if (mf == NULL)
+    {
+      lock_acquire (&filesys_lock);
+      file_close (reopened_file);
+      lock_release (&filesys_lock);
+      return -1;
+    }
+  
+  mf->mapid = cur->next_mapid++;
+  mf->file = reopened_file;
+  list_init (&mf->vme_list);
+  
+  /* 5. 파일을 페이지 단위로 나누어 vm_entry 생성 */
+  remaining = file_len;
+  void *upage = addr;
+  
+  while (remaining > 0)
+    {
+      size_t page_read_bytes = remaining < PGSIZE ? remaining : PGSIZE;
+      size_t page_zero_bytes = PGSIZE - page_read_bytes;
+      
+      /* vm_entry 생성 */
+      struct vm_entry *vme = malloc (sizeof (struct vm_entry));
+      if (vme == NULL)
+        {
+          /* 롤백: 이미 생성된 vm_entry 들을 정리 */
+          munmap (mf->mapid);
+          return -1;
+        }
+      
+      vme->type = VM_FILE;
+      vme->vaddr = upage;
+      vme->writable = true;
+      vme->is_loaded = false;
+      vme->file = reopened_file;
+      vme->offset = ofs;
+      vme->read_bytes = page_read_bytes;
+      vme->zero_bytes = page_zero_bytes;
+      vme->swap_slot = SWAP_ERROR;
+      
+      /* SPT에 등록 */
+      if (!insert_vme (&cur->vm, vme))
+        {
+          free (vme);
+          munmap (mf->mapid);
+          return -1;
+        }
+      
+      /* mmap_vme 생성하여 mmap_file의 리스트에 추가 */
+      struct mmap_vme *mvme = malloc (sizeof (struct mmap_vme));
+      if (mvme == NULL)
+        {
+          munmap (mf->mapid);
+          return -1;
+        }
+      mvme->vme = vme;
+      list_push_back (&mf->vme_list, &mvme->elem);
+      
+      /* 다음 페이지 */
+      remaining -= page_read_bytes;
+      upage += PGSIZE;
+      ofs += page_read_bytes;
+    }
+  
+  /* 6. mmap_list에 추가 */
+  list_push_back (&cur->mmap_list, &mf->elem);
+  
+  return mf->mapid;
+}
+
+/* munmap: 메모리 매핑 해제 */
+void 
+munmap (mapid_t mapid)
+{
+  struct thread *cur = thread_current ();
+  struct list_elem *e;
+  struct mmap_file *mf = NULL;
+  
+  /* mapid에 해당하는 mmap_file 찾기 */
+  for (e = list_begin (&cur->mmap_list); e != list_end (&cur->mmap_list); 
+       e = list_next (e))
+    {
+      struct mmap_file *temp = list_entry (e, struct mmap_file, elem);
+      if (temp->mapid == mapid)
+        {
+          mf = temp;
+          break;
+        }
+    }
+  
+  if (mf == NULL)
+    return;  /* 해당 mapid를 찾지 못함 */
+  
+  /* mmap_file에 속한 모든 vm_entry 처리 */
+  while (!list_empty (&mf->vme_list))
+    {
+      struct list_elem *vme_elem = list_pop_front (&mf->vme_list);
+      struct mmap_vme *mvme = list_entry (vme_elem, struct mmap_vme, elem);
+      struct vm_entry *vme = mvme->vme;
+      
+      /* 로드된 상태라면 Write-back 및 프레임 해제 */
+      if (vme->is_loaded)
+        {
+          void *kaddr = pagedir_get_page (cur->pagedir, vme->vaddr);
+          if (kaddr != NULL)
+            {
+              /* Dirty 페이지는 파일에 기록 */
+              if (pagedir_is_dirty (cur->pagedir, vme->vaddr))
+                {
+                  lock_acquire (&filesys_lock);
+                  file_write_at (vme->file, kaddr, vme->read_bytes, vme->offset);
+                  lock_release (&filesys_lock);
+                }
+              /* 프레임 해제 */
+              frame_free (kaddr);
+              pagedir_clear_page (cur->pagedir, vme->vaddr);
+            }
+        }
+      
+      /* SPT에서 제거 */
+      hash_delete (&cur->vm, &vme->elem);
+      free (vme);
+      free (mvme);
+    }
+  
+  /* mmap_list에서 제거 */
+  list_remove (&mf->elem);
+  
+  /* 파일 닫기 */
+  lock_acquire (&filesys_lock);
+  file_close (mf->file);
+  lock_release (&filesys_lock);
+  
+  free (mf);
+}
+
+/* 프로세스 종료 시 모든 mmap 해제 */
+void
+munmap_all (void)
+{
+  struct thread *cur = thread_current ();
+  
+  while (!list_empty (&cur->mmap_list))
+    {
+      struct list_elem *e = list_front (&cur->mmap_list);
+      struct mmap_file *mf = list_entry (e, struct mmap_file, elem);
+      munmap (mf->mapid);
+    }
+}
+#endif

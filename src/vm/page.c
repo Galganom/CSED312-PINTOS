@@ -5,6 +5,7 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "vm/frame.h"
+#include "vm/swap.h"
 #include "filesys/file.h"
 
 /* 해시 함수: vaddr을 해싱 */
@@ -41,6 +42,12 @@ vm_destroy_func (struct hash_elem *e, void *aux UNUSED)
             frame_free (kaddr);
             pagedir_clear_page (cur->pagedir, vme->vaddr);
         }
+    }
+    /* Case 2: 스왑 영역에 있는 상태 (VM_ANON) */
+    else if (vme->type == VM_ANON && vme->swap_slot != SWAP_ERROR)
+    {
+        /* 스왑 비트맵에서 해당 슬롯을 해제 */
+        swap_free (vme->swap_slot);
     }
 
     /* 공통: vm_entry 구조체 메모리 해제 */

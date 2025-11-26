@@ -19,6 +19,7 @@
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "threads/synch.h"
+#include "userprog/syscall.h"
 
 #ifdef VM
 #include "vm/page.h"
@@ -121,6 +122,9 @@ start_process (void *command_line_) // Renamed parameter for clarity
 #ifdef VM
   /* VM: SPT 초기화 */
   vm_init (&cur->vm);
+  /* mmap 리스트 초기화 */
+  list_init (&cur->mmap_list);
+  cur->next_mapid = 1;
 #endif
 
   if (cur->fd_table == NULL)
@@ -343,7 +347,10 @@ process_exit (void)
   cur->fd_max = 0;
 
 #ifdef VM
-  /* VM: SPT 파괴 (해시 테이블 순회하며 각 vm_entry 삭제) */
+  /* 1. mmap 파일 정리 (Dirty Page 파일 기록 수행) */
+  munmap_all ();
+  
+  /* 2. SPT 파괴 (해시 테이블 순회하며 각 vm_entry 삭제) */
   vm_destroy (&cur->vm);
 #endif
 
