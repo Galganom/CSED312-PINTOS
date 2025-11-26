@@ -187,7 +187,7 @@ stack_growth (void *fault_addr)
 }
 
 /* 페이지 폴트를 처리하는 핵심 함수 */
-static bool
+bool
 handle_mm_fault (struct vm_entry *vme)
 {
   /* 물리 프레임 할당 요청 (A의 함수) */

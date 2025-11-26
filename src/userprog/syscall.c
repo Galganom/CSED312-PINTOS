@@ -17,11 +17,13 @@
 #include "vm/frame.h"
 #include "vm/swap.h"
 #include "userprog/pagedir.h"
+#include "userprog/exception.h"
 #include "threads/malloc.h"
 
 /* Buffer Pinning 헬퍼 함수 (Section 10) */
 static void pin_buffer (void *buffer, unsigned size, bool writable);
 static void unpin_buffer (void *buffer, unsigned size);
+static bool pin_page (void *upage, bool writable);
 #endif
 
 typedef int pid_t;
@@ -641,6 +643,101 @@ munmap_all (void)
 
 /* [Section 10] Buffer Pinning 헬퍼 함수 구현 */
 
+/*
+ * pin_page: 단일 페이지를 메모리에 고정
+ * - upage: 페이지 정렬된 가상 주소
+ * - writable: 쓰기 권한 필요 여부
+ * - return: 성공 시 true
+ */
+static bool
+pin_page (void *upage, bool writable)
+{
+  struct thread *cur = thread_current ();
+  struct vm_entry *vme = find_vme (upage);
+  
+  /* 1. vm_entry가 있는 경우 */
+  if (vme != NULL)
+    {
+      /* 쓰기 권한 검사 */
+      if (writable && !vme->writable)
+        return false;
+      
+      /* 페이지가 로드되지 않았다면 로드 수행 */
+      if (!vme->is_loaded)
+        {
+          if (!handle_mm_fault (vme))
+            return false;
+        }
+      
+      /* 해당 프레임을 찾아서 pin 설정 */
+      void *kaddr = pagedir_get_page (cur->pagedir, vme->vaddr);
+      if (kaddr != NULL)
+        frame_set_pinned (kaddr, true);
+      
+      return true;
+    }
+  
+  /* 2. vm_entry가 없는 경우 - 스택 영역인지 확인 */
+  /* 스택은 PHYS_BASE 아래, 스택 제한(8MB) 이내여야 함 */
+  void *stack_limit = (void *)(PHYS_BASE - (1 << 23)); /* 8MB */
+  
+  if (upage >= stack_limit && upage < PHYS_BASE)
+    {
+      /* 스택 확장이 필요한 경우 - vm_entry 생성 및 프레임 할당 */
+      struct vm_entry *new_vme = malloc (sizeof (struct vm_entry));
+      if (new_vme == NULL)
+        return false;
+      
+      new_vme->type = VM_ANON;
+      new_vme->vaddr = upage;
+      new_vme->writable = true;
+      new_vme->is_loaded = true;
+      new_vme->file = NULL;
+      new_vme->offset = 0;
+      new_vme->read_bytes = 0;
+      new_vme->zero_bytes = PGSIZE;
+      new_vme->swap_slot = SWAP_ERROR;
+      
+      /* 물리 프레임 할당 */
+      void *kaddr = frame_alloc (PAL_ZERO, new_vme);
+      if (kaddr == NULL)
+        {
+          free (new_vme);
+          return false;
+        }
+      
+      /* 페이지 테이블에 매핑 */
+      if (!pagedir_set_page (cur->pagedir, upage, kaddr, true))
+        {
+          frame_free (kaddr);
+          free (new_vme);
+          return false;
+        }
+      
+      /* SPT에 등록 */
+      if (!insert_vme (&cur->vm, new_vme))
+        {
+          pagedir_clear_page (cur->pagedir, upage);
+          frame_free (kaddr);
+          free (new_vme);
+          return false;
+        }
+      
+      /* frame_alloc에서 이미 pinned=true로 설정됨 */
+      return true;
+    }
+  
+  /* 3. 이미 물리 메모리에 매핑된 페이지 (pagedir에는 있지만 SPT에는 없는 경우) */
+  void *kaddr = pagedir_get_page (cur->pagedir, upage);
+  if (kaddr != NULL)
+    {
+      frame_set_pinned (kaddr, true);
+      return true;
+    }
+  
+  return false;
+}
+
 /* 
  * pin_buffer: 버퍼가 속한 모든 페이지를 메모리에 고정
  * - buffer: 버퍼 시작 주소
@@ -650,69 +747,18 @@ munmap_all (void)
 static void 
 pin_buffer (void *buffer, unsigned size, bool writable)
 {
-  struct thread *cur = thread_current ();
   void *upage;
+  
+  if (size == 0)
+    return;
   
   /* 버퍼가 걸쳐있는 모든 페이지를 순회 */
   for (upage = pg_round_down (buffer); 
        upage < buffer + size; 
        upage += PGSIZE)
     {
-      /* 1. 해당 페이지의 vm_entry 찾기 */
-      struct vm_entry *vme = find_vme (upage);
-      
-      if (vme == NULL)
-        continue;  /* SPT에 없으면 스킵 (스택 영역 등은 page fault로 처리) */
-      
-      /* 2. 쓰기 권한 검사 (writable 버퍼인데 읽기 전용 페이지면 오류) */
-      if (writable && !vme->writable)
+      if (!pin_page (upage, writable))
         exit (-1);
-      
-      /* 3. 페이지가 로드되지 않았다면 로드 수행 */
-      if (!vme->is_loaded)
-        {
-          /* Page Fault Handler의 로직과 유사 */
-          void *kaddr = frame_alloc (PAL_USER, vme);
-          if (kaddr == NULL)
-            exit (-1);
-          
-          bool success = false;
-          switch (vme->type)
-            {
-              case VM_BIN:
-              case VM_FILE:
-                success = load_file (kaddr, vme);
-                break;
-              case VM_ANON:
-                swap_in (vme->swap_slot, kaddr);
-                success = true;
-                break;
-            }
-          
-          if (!success)
-            {
-              frame_free (kaddr);
-              exit (-1);
-            }
-          
-          if (!pagedir_set_page (cur->pagedir, vme->vaddr, kaddr, vme->writable))
-            {
-              frame_free (kaddr);
-              exit (-1);
-            }
-          
-          vme->is_loaded = true;
-          /* frame_alloc에서 이미 pinned=true로 설정됨, 여기서는 유지 */
-        }
-      else
-        {
-          /* 4. 이미 로드된 페이지라면 해당 프레임을 찾아서 pin 설정 */
-          void *kaddr = pagedir_get_page (cur->pagedir, vme->vaddr);
-          if (kaddr != NULL)
-            {
-              frame_set_pinned (kaddr, true);
-            }
-        }
     }
 }
 
@@ -725,21 +771,17 @@ unpin_buffer (void *buffer, unsigned size)
   struct thread *cur = thread_current ();
   void *upage;
   
+  if (size == 0)
+    return;
+  
   /* 버퍼가 걸쳐있는 모든 페이지를 순회 */
   for (upage = pg_round_down (buffer); 
        upage < buffer + size; 
        upage += PGSIZE)
     {
-      struct vm_entry *vme = find_vme (upage);
-      
-      if (vme == NULL || !vme->is_loaded)
-        continue;
-      
-      void *kaddr = pagedir_get_page (cur->pagedir, vme->vaddr);
+      void *kaddr = pagedir_get_page (cur->pagedir, upage);
       if (kaddr != NULL)
-        {
-          frame_set_pinned (kaddr, false);
-        }
+        frame_set_pinned (kaddr, false);
     }
 }
 #endif
