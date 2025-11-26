@@ -6,6 +6,10 @@
 #include <stdint.h>
 #include "synch.h"
 
+#ifdef VM
+#include <hash.h>
+#endif
+
 struct child_process;
 
 /* States in a thread's life cycle. */
@@ -109,6 +113,11 @@ struct thread
     int fd_max;
 
     struct file* cur_file;
+#endif
+
+#ifdef VM
+    /* Virtual Memory - Supplemental Page Table */
+    struct hash vm;                     /* 해시 테이블로 구현된 SPT */
 #endif
 
     /* Owned by thread.c. */
