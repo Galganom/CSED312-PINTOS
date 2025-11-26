@@ -19,6 +19,12 @@
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "threads/synch.h"
+#include "userprog/syscall.h"
+
+#ifdef VM
+#include "vm/page.h"
+#include "vm/frame.h"
+#endif
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -112,6 +118,14 @@ start_process (void *command_line_) // Renamed parameter for clarity
   bool success;
   struct thread *cur = thread_current ();
   struct child_process *cp = cur->child_info;
+
+#ifdef VM
+  // VM: SPT 초기화
+  vm_init (&cur->vm);
+  // mmap 리스트 초기화
+  list_init (&cur->mmap_list);
+  cur->next_mapid = 1;
+#endif
 
   if (cur->fd_table == NULL)
     {
@@ -331,6 +345,14 @@ process_exit (void)
       cur->fd_table = NULL;
     }
   cur->fd_max = 0;
+
+#ifdef VM
+  // 1. mmap 파일 정리 (Dirty Page 파일 기록 수행)
+  munmap_all ();
+  
+  // 2. SPT 파괴 (해시 테이블 순회하며 각 vm_entry 삭제)
+  vm_destroy (&cur->vm);
+#endif
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -648,6 +670,48 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
+#ifdef VM
+  // Lazy Loading: 실제 데이터를 로드하지 않고 메타데이터만 SPT에 등록
+  off_t current_ofs = ofs;
+  
+  while (read_bytes > 0 || zero_bytes > 0) 
+    {
+      // Calculate how to fill this page.
+      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+      size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+      // vm_entry 생성 및 초기화
+      struct vm_entry *vme = malloc (sizeof (struct vm_entry));
+      if (vme == NULL)
+        return false;
+
+      vme->type = VM_BIN;
+      vme->vaddr = upage;
+      vme->writable = writable;
+      vme->is_loaded = false;     // 아직 로드되지 않음
+      vme->file = file;           // file 객체는 process_exit 전까지 닫으면 안 됨
+      vme->offset = current_ofs;
+      vme->read_bytes = page_read_bytes;
+      vme->zero_bytes = page_zero_bytes;
+      vme->swap_slot = SWAP_ERROR;
+
+      // SPT에 등록
+      if (!insert_vme (&thread_current ()->vm, vme))
+        {
+          free (vme);
+          return false;
+        }
+
+      // Advance
+      read_bytes -= page_read_bytes;
+      zero_bytes -= page_zero_bytes;
+      current_ofs += page_read_bytes;
+      upage += PGSIZE;
+    }
+  return true;
+
+#else
+  // Original implementation without VM
   file_seek (file, ofs);
   while (read_bytes > 0 || zero_bytes > 0) 
     {
@@ -683,6 +747,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       upage += PGSIZE;
     }
   return true;
+#endif
 }
 
 /* Create a minimal stack by mapping a zeroed page at the top of
@@ -690,6 +755,55 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp) 
 {
+#ifdef VM
+  void *upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
+  
+  // vm_entry 생성 및 초기화 (스택은 VM_ANON 타입)
+  struct vm_entry *vme = malloc (sizeof (struct vm_entry));
+  if (vme == NULL)
+    return false;
+
+  vme->type = VM_ANON;
+  vme->vaddr = upage;
+  vme->writable = true;
+  vme->is_loaded = true;    // 스택은 바로 로드됨
+  vme->file = NULL;
+  vme->offset = 0;
+  vme->read_bytes = 0;
+  vme->zero_bytes = PGSIZE;
+  vme->swap_slot = SWAP_ERROR;
+
+  // 물리 프레임 할당
+  void *kpage = frame_allocate (PAL_ZERO, vme);
+  if (kpage == NULL)
+    {
+      free (vme);
+      return false;
+    }
+
+  // 페이지 테이블에 매핑
+  if (!install_page (upage, kpage, true))
+    {
+      frame_free (kpage);
+      free (vme);
+      return false;
+    }
+
+  // SPT에 등록
+  if (!insert_vme (&thread_current ()->vm, vme))
+    {
+      frame_free (kpage);
+      free (vme);
+      return false;
+    }
+
+  // 스택은 바로 사용되므로 pinned를 false로 설정
+  frame_pin_allocate (kpage, false);
+
+  *esp = PHYS_BASE;
+  return true;
+
+#else
   uint8_t *kpage;
   bool success = false;
 
@@ -703,6 +817,7 @@ setup_stack (void **esp)
         palloc_free_page (kpage);
     }
   return success;
+#endif
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel

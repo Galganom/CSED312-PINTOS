@@ -6,6 +6,9 @@
 #include "threads/synch.h"
 
 typedef int pid_t;
+typedef int mapid_t;
+
+void syscall_init (void);
 
 void halt (void) NO_RETURN;
 void exit (int status) NO_RETURN;
@@ -21,6 +24,16 @@ void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
 
+#ifdef VM
+mapid_t mmap (int fd, void *addr);
+void munmap (mapid_t mapid);
+void munmap_all (void);
+#endif
+
 extern struct lock filesys_lock;
 
-#endif /* lib/user/syscall.h */
+void is_valid_addr(void *addr);
+void read_esp(void *esp, int *data, int count);
+struct file *process_get_file(int fd);
+
+#endif
