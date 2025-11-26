@@ -5,6 +5,7 @@
 #include "userprog/pagedir.h"
 #include "vm/page.h"
 #include "vm/swap.h"
+#include "filesys/file.h"
 
 /* 전역 Frame Table 및 Lock */
 static struct list frame_table;
@@ -162,10 +163,12 @@ evict_frame (enum palloc_flags flags)
         return NULL;
 
     /* Clock hand 초기화 */
-    if (clock_hand == NULL)
+    if (clock_hand == NULL || clock_hand == list_end (&frame_table))
         clock_hand = list_begin (&frame_table);
 
     struct list_elem *start = clock_hand;
+    size_t pass_count = 0;  /* 순회 횟수 추적 */
+    size_t frame_count = list_size (&frame_table);
     
     while (true) 
     {
@@ -184,15 +187,34 @@ evict_frame (enum palloc_flags flags)
             {
                 /* Victim 선정 완료 -> Swap Out 수행 */
                 
-                /* 1. Dirty Check & Swap/File Write */
-                if (pagedir_is_dirty (f->t->pagedir, f->vme->vaddr) || 
-                    f->vme->type == VM_ANON) 
+                /* 1. Dirty Check & Swap/File Write (블루프린트 Section 8) */
+                bool is_dirty = pagedir_is_dirty (f->t->pagedir, f->vme->vaddr);
+                
+                if (f->vme->type == VM_FILE) 
                 {
-                    /* VM_ANON 타입 또는 Dirty -> 스왑 영역에 저장 */
-                    f->vme->swap_slot = swap_out (f->kaddr);
-                    f->vme->type = VM_ANON;
+                    /* VM_FILE 타입이고 Dirty -> 파일에 저장 */
+                    if (is_dirty) 
+                    {
+                        file_write_at (f->vme->file, f->kaddr, 
+                                       f->vme->read_bytes, f->vme->offset);
+                    }
+                    /* 깨끗한 파일 페이지 -> 그냥 버림 (나중에 파일에서 다시 읽으면 됨) */
                 }
-                /* 깨끗한 파일 페이지 -> 그냥 버림 (나중에 파일에서 다시 읽으면 됨) */
+                else if (f->vme->type == VM_ANON) 
+                {
+                    /* VM_ANON 타입 -> 항상 스왑 영역에 저장 */
+                    f->vme->swap_slot = swap_out (f->kaddr);
+                }
+                else if (f->vme->type == VM_BIN) 
+                {
+                    /* VM_BIN 타입이고 Dirty -> 스왑에 저장하고 타입 변경 */
+                    if (is_dirty) 
+                    {
+                        f->vme->swap_slot = swap_out (f->kaddr);
+                        f->vme->type = VM_ANON;
+                    }
+                    /* 깨끗한 VM_BIN -> 그냥 버림 (나중에 ELF에서 다시 읽으면 됨) */
+                }
                 
                 /* 2. SPT 상태 업데이트 */
                 f->vme->is_loaded = false;
@@ -221,16 +243,24 @@ evict_frame (enum palloc_flags flags)
         /* 다음 프레임으로 이동 */
         clock_hand = get_next_frame (clock_hand);
         
-        /* 한 바퀴 돌아서 시작점으로 돌아왔다면 (모든 페이지가 pinned) */
+        /* 한 바퀴 돌아서 시작점으로 돌아왔다면 패스 카운트 증가 */
         if (clock_hand == start) 
         {
-            /* 두 번째 패스에서도 victim을 못 찾으면 NULL 반환 */
-            /* 여기서는 한 번 더 순회를 허용 */
-            struct frame *check = list_entry (clock_hand, struct frame, elem);
-            if (check->pinned) 
+            pass_count++;
+            /* 2번 순회해도 victim을 못 찾으면 (모든 페이지가 pinned) */
+            if (pass_count >= 2) 
             {
-                /* 시작점도 pinned면 실패 가능성 높음 */
                 return NULL;
+            }
+        }
+        
+        /* 안전장치: 예상치 못한 무한 루프 방지 */
+        if (pass_count == 0 && frame_count > 0)
+        {
+            frame_count--;
+            if (frame_count == 0)
+            {
+                pass_count = 1;  /* 최소 한 바퀴는 돌았음 */
             }
         }
     }

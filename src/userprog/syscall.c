@@ -15,8 +15,13 @@
 #ifdef VM
 #include "vm/page.h"
 #include "vm/frame.h"
+#include "vm/swap.h"
 #include "userprog/pagedir.h"
 #include "threads/malloc.h"
+
+/* Buffer Pinning 헬퍼 함수 (Section 10) */
+static void pin_buffer (void *buffer, unsigned size, bool writable);
+static void unpin_buffer (void *buffer, unsigned size);
 #endif
 
 typedef int pid_t;
@@ -124,9 +129,18 @@ void read_esp(void *esp, int *data, int count) {
 }
 
 void is_valid_addr(void *addr) {
-	// 주소가 NULL 이거나 유저영역의 주소가 아니거나 페이지가 존재하지 않음
-	if (!addr || !is_user_vaddr(addr) || !pagedir_get_page(thread_current()->pagedir, addr))
+	// 주소가 NULL 이거나 유저영역의 주소가 아닌 경우
+	if (!addr || !is_user_vaddr(addr))
 		exit(-1);
+#ifdef VM
+	/* VM 환경에서는 SPT를 확인 (lazy loading 지원) */
+	struct vm_entry *vme = find_vme (addr);
+	if (vme == NULL && pagedir_get_page(thread_current()->pagedir, addr) == NULL)
+		exit(-1);
+#else
+	if (!pagedir_get_page(thread_current()->pagedir, addr))
+		exit(-1);
+#endif
 }
 
 static void validate_string (const char *str) {
@@ -272,6 +286,11 @@ int read (int fd, void *buffer, unsigned size) {
     is_valid_addr(buffer+i);
   }
 
+#ifdef VM
+  /* [Section 10] Buffer Pinning - 읽기 전에 버퍼 고정 */
+  pin_buffer (buffer, size, true);  /* writable=true: 읽기 시 버퍼에 쓰기 필요 */
+#endif
+
   if(fd==0) {
     for (i = 0; i < size;i++) {
       ((char*)buffer)[i]=input_getc();
@@ -282,12 +301,22 @@ int read (int fd, void *buffer, unsigned size) {
   }
   else if(fd > 0) {
     f = process_get_file(fd);
-    if(!f)
+    if(!f) {
+#ifdef VM
+      unpin_buffer (buffer, size);
+#endif
       return -1;
+    }
     lock_acquire(&filesys_lock);
     bytes_read = file_read(f, buffer, size);
     lock_release(&filesys_lock);
   }
+
+#ifdef VM
+  /* [Section 10] Buffer Unpinning - 읽기 완료 후 해제 */
+  unpin_buffer (buffer, size);
+#endif
+
   return bytes_read;
 }
 
@@ -299,23 +328,41 @@ int write (int fd, const void *buffer, unsigned size) {
   unsigned i;
 
   for (i = 0; i < size; i++) {
-    is_valid_addr(buffer+i);
+    is_valid_addr((void *)(buffer+i));
   }
+
+#ifdef VM
+  /* [Section 10] Buffer Pinning - 쓰기 전에 버퍼 고정 */
+  pin_buffer ((void *)buffer, size, false);  /* writable=false: 쓰기 시 버퍼에서 읽기만 필요 */
+#endif
 
   if(fd == 1) {
     lock_acquire(&filesys_lock);
     putbuf(buffer, size);
     lock_release(&filesys_lock);
+#ifdef VM
+    unpin_buffer ((void *)buffer, size);
+#endif
     return size;
   }
   else if(fd > 1) {
     f = process_get_file(fd);
-    if(!f)
+    if(!f) {
+#ifdef VM
+      unpin_buffer ((void *)buffer, size);
+#endif
       return -1;
+    }
     lock_acquire(&filesys_lock);
     bytes_write = file_write(f, buffer, size);
     lock_release(&filesys_lock);
   }
+
+#ifdef VM
+  /* [Section 10] Buffer Unpinning - 쓰기 완료 후 해제 */
+  unpin_buffer ((void *)buffer, size);
+#endif
+
   return bytes_write;
 }
 
@@ -589,6 +636,110 @@ munmap_all (void)
       struct list_elem *e = list_front (&cur->mmap_list);
       struct mmap_file *mf = list_entry (e, struct mmap_file, elem);
       munmap (mf->mapid);
+    }
+}
+
+/* [Section 10] Buffer Pinning 헬퍼 함수 구현 */
+
+/* 
+ * pin_buffer: 버퍼가 속한 모든 페이지를 메모리에 고정
+ * - buffer: 버퍼 시작 주소
+ * - size: 버퍼 크기
+ * - writable: 버퍼에 쓰기가 필요한 경우 true (read 시스템콜)
+ */
+static void 
+pin_buffer (void *buffer, unsigned size, bool writable)
+{
+  struct thread *cur = thread_current ();
+  void *upage;
+  
+  /* 버퍼가 걸쳐있는 모든 페이지를 순회 */
+  for (upage = pg_round_down (buffer); 
+       upage < buffer + size; 
+       upage += PGSIZE)
+    {
+      /* 1. 해당 페이지의 vm_entry 찾기 */
+      struct vm_entry *vme = find_vme (upage);
+      
+      if (vme == NULL)
+        continue;  /* SPT에 없으면 스킵 (스택 영역 등은 page fault로 처리) */
+      
+      /* 2. 쓰기 권한 검사 (writable 버퍼인데 읽기 전용 페이지면 오류) */
+      if (writable && !vme->writable)
+        exit (-1);
+      
+      /* 3. 페이지가 로드되지 않았다면 로드 수행 */
+      if (!vme->is_loaded)
+        {
+          /* Page Fault Handler의 로직과 유사 */
+          void *kaddr = frame_alloc (PAL_USER, vme);
+          if (kaddr == NULL)
+            exit (-1);
+          
+          bool success = false;
+          switch (vme->type)
+            {
+              case VM_BIN:
+              case VM_FILE:
+                success = load_file (kaddr, vme);
+                break;
+              case VM_ANON:
+                swap_in (vme->swap_slot, kaddr);
+                success = true;
+                break;
+            }
+          
+          if (!success)
+            {
+              frame_free (kaddr);
+              exit (-1);
+            }
+          
+          if (!pagedir_set_page (cur->pagedir, vme->vaddr, kaddr, vme->writable))
+            {
+              frame_free (kaddr);
+              exit (-1);
+            }
+          
+          vme->is_loaded = true;
+          /* frame_alloc에서 이미 pinned=true로 설정됨, 여기서는 유지 */
+        }
+      else
+        {
+          /* 4. 이미 로드된 페이지라면 해당 프레임을 찾아서 pin 설정 */
+          void *kaddr = pagedir_get_page (cur->pagedir, vme->vaddr);
+          if (kaddr != NULL)
+            {
+              frame_set_pinned (kaddr, true);
+            }
+        }
+    }
+}
+
+/*
+ * unpin_buffer: 버퍼가 속한 모든 페이지의 고정 해제
+ */
+static void 
+unpin_buffer (void *buffer, unsigned size)
+{
+  struct thread *cur = thread_current ();
+  void *upage;
+  
+  /* 버퍼가 걸쳐있는 모든 페이지를 순회 */
+  for (upage = pg_round_down (buffer); 
+       upage < buffer + size; 
+       upage += PGSIZE)
+    {
+      struct vm_entry *vme = find_vme (upage);
+      
+      if (vme == NULL || !vme->is_loaded)
+        continue;
+      
+      void *kaddr = pagedir_get_page (cur->pagedir, vme->vaddr);
+      if (kaddr != NULL)
+        {
+          frame_set_pinned (kaddr, false);
+        }
     }
 }
 #endif
