@@ -12,7 +12,9 @@
 static unsigned 
 vm_hash_func (const struct hash_elem *e, void *aux UNUSED) 
 {
+    // hash_elem 으로 vm_entry 알아냄
     struct vm_entry *vme = hash_entry (e, struct vm_entry, elem);
+    // vm_entry -> vddr 의 해시값 반환
     return hash_bytes (&vme->vaddr, sizeof (vme->vaddr));
 }
 
@@ -65,7 +67,7 @@ vm_init (struct hash *vm)
 void 
 vm_destroy (struct hash *vm) 
 {
-    hash_destroy (vm, vm_destroy_func);
+    hash_destroy (vm, vm_destroy_func); // lib/kernel/hash.c 빌트인 함수
 }
 
 /* SPT에서 vaddr에 해당하는 vm_entry를 검색 (가장 중요) */
@@ -114,6 +116,7 @@ load_file (void *kaddr, struct vm_entry *vme)
         return false;
 
     /* 파일에서 read_bytes만큼 읽기 */
+    // vme->file을 kaddr에 복사하기
     off_t bytes_read = file_read_at (vme->file, kaddr, vme->read_bytes, vme->offset);
     
     if (bytes_read != (off_t) vme->read_bytes)

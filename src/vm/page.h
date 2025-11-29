@@ -7,7 +7,6 @@
 #include "filesys/off_t.h"
 #include "threads/synch.h"
 
-/* [Team 23 Decision] 비트 마스크로 타입 관리 */
 #define VM_BIN  0    /* 바이너리(실행 파일)에서 로드된 페이지 */
 #define VM_FILE 1    /* mmap으로 매핑된 파일 페이지 */
 #define VM_ANON 2    /* 스왑 대상 (Stack, Heap) */
@@ -29,7 +28,7 @@ struct vm_entry {
     size_t read_bytes;      /* 파일에서 읽어야 할 바이트 수 */
     size_t zero_bytes;      /* 0으로 채워야 할 바이트 수 (padding) */
 
-    /* Swap 정보 [담당자 A와 연동] */
+    /* Swap 정보 */
     size_t swap_slot;       /* 스왑 디스크 내 인덱스 */
 
     /* Hash Table 관리를 위한 요소 */
@@ -50,7 +49,7 @@ struct mmap_vme {
     struct list_elem elem;      /* vme_list 연결용 */
 };
 
-/* SPT 관리 함수 선언 (B 담당) */
+/* SPT 관리 함수 선언 */
 void vm_init (struct hash *vm);
 void vm_destroy (struct hash *vm);
 struct vm_entry *find_vme (void *vaddr);

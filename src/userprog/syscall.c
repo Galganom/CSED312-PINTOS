@@ -483,7 +483,7 @@ mmap (int fd, void *addr)
   
   /* 3. 파일 복제 (file_reopen) - close(fd) 후에도 매핑 유지 */
   lock_acquire (&filesys_lock);
-  reopened_file = file_reopen (file);
+  reopened_file = file_reopen (file); // 실제 파일은 동일한데 struct file을 새로 만듬
   lock_release (&filesys_lock);
   
   if (reopened_file == NULL)
@@ -513,7 +513,7 @@ mmap (int fd, void *addr)
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
       
       /* vm_entry 생성 */
-      struct vm_entry *vme = malloc (sizeof (struct vm_entry));
+      struct vm_entry *vme = malloc (sizeof (struct vm_entry)); // physical memory allocation 아님
       if (vme == NULL)
         {
           /* 롤백: 이미 생성된 vm_entry 들을 정리 */
@@ -521,10 +521,10 @@ mmap (int fd, void *addr)
           return -1;
         }
       
-      vme->type = VM_FILE;
+      vme->type = VM_FILE; // 파일 매핑 타입
       vme->vaddr = upage;
-      vme->writable = true;
-      vme->is_loaded = false;
+      vme->writable = true; // mmap은 기본적으로 쓰기 가능
+      vme->is_loaded = false; // lazy loading
       vme->file = reopened_file;
       vme->offset = ofs;
       vme->read_bytes = page_read_bytes;
@@ -566,10 +566,10 @@ void
 munmap (mapid_t mapid)
 {
   struct thread *cur = thread_current ();
-  struct list_elem *e;
   struct mmap_file *mf = NULL;
   
   /* mapid에 해당하는 mmap_file 찾기 */
+  struct list_elem *e;
   for (e = list_begin (&cur->mmap_list); e != list_end (&cur->mmap_list); 
        e = list_next (e))
     {
@@ -587,6 +587,7 @@ munmap (mapid_t mapid)
   /* mmap_file에 속한 모든 vm_entry 처리 */
   while (!list_empty (&mf->vme_list))
     {
+      // 각 page에 대해
       struct list_elem *vme_elem = list_pop_front (&mf->vme_list);
       struct mmap_vme *mvme = list_entry (vme_elem, struct mmap_vme, elem);
       struct vm_entry *vme = mvme->vme;
@@ -641,7 +642,7 @@ munmap_all (void)
     }
 }
 
-/* [Section 10] Buffer Pinning 헬퍼 함수 구현 */
+/* Buffer Pinning */
 
 /*
  * pin_page: 단일 페이지를 메모리에 고정

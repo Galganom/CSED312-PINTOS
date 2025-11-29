@@ -69,7 +69,7 @@ frame_alloc (enum palloc_flags flags, struct vm_entry *vme)
     f->kaddr = kaddr;
     f->vme = vme;
     f->t = thread_current ();
-    f->pinned = true; /* [중요] 할당 시점에는 일단 고정함 (로딩 중 Eviction 방지) */
+    f->pinned = true; /* 할당 시점에는 일단 고정함 (로딩 중 Eviction 방지) */
 
     /* 4. 관리 리스트에 추가 */
     list_push_back (&frame_table, &f->elem);
@@ -174,7 +174,7 @@ evict_frame (enum palloc_flags flags)
     {
         struct frame *f = list_entry (clock_hand, struct frame, elem);
         
-        /* [핵심] Pinned 프레임은 건너뜀 */
+        /*  Pinned 프레임은 건너뜀 */
         if (!f->pinned) 
         {
             /* Accessed 비트 확인 (최근 참조 여부) */
@@ -187,7 +187,7 @@ evict_frame (enum palloc_flags flags)
             {
                 /* Victim 선정 완료 -> Swap Out 수행 */
                 
-                /* 1. Dirty Check & Swap/File Write (블루프린트 Section 8) */
+                /* 1. Dirty Check & Swap/File Write */
                 bool is_dirty = pagedir_is_dirty (f->t->pagedir, f->vme->vaddr);
                 
                 if (f->vme->type == VM_FILE) 

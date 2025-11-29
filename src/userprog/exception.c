@@ -190,7 +190,7 @@ stack_growth (void *fault_addr)
 bool
 handle_mm_fault (struct vm_entry *vme)
 {
-  /* 물리 프레임 할당 요청 (A의 함수) */
+  /* 물리 프레임 할당 요청 */
   /* frame_alloc 내부에서 pinned=true 상태로 프레임이 반환됨 */
   void *kaddr = frame_alloc (PAL_USER, vme);
   if (kaddr == NULL)
