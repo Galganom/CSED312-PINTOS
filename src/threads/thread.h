@@ -4,6 +4,13 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "synch.h"
+
+#ifdef VM
+#include <hash.h>
+#endif
+
+struct child_process;
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -96,6 +103,25 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+
+    struct child_process *child_info;   /* Parent/child shared state. */
+    struct thread *parent_thread;       /* 이 스레드를 생성한 부모 스레드를 가리킴 */
+    struct list child_list;             /* 이 스레드가 생성한 자식 스레드들의 리스트 */
+    int process_exit_status;            /* wait()가 반환할 종료 상태 (기본 -1) */
+
+    struct file **fd_table;
+    int fd_max;
+
+    struct file* cur_file;
+#endif
+
+#ifdef VM
+    // Virtual Memory - Supplemental Page Table
+    struct hash vm;                     // 해시 테이블로 구현된 SPT
+    
+    // Memory Mapped Files
+    struct list mmap_list;              // mmap된 파일들의 리스트
+    int next_mapid;                     // 다음 mmap ID
 #endif
 
     /* Owned by thread.c. */

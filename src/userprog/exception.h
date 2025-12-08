@@ -9,4 +9,10 @@
 void exception_init (void);
 void exception_print_stats (void);
 
+#ifdef VM
+#include "vm/page.h"
+// Page Fault 처리 함수 (Lazy Loading 수행) - syscall에서도 사용
+bool handle_mm_fault (struct vm_entry *vme);
+#endif
+
 #endif /* userprog/exception.h */

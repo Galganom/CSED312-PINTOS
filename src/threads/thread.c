@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -183,6 +184,32 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+#ifdef USERPROG
+  {
+    struct thread *parent = thread_current ();
+    if (parent != NULL)
+      {
+        struct child_process *cp = malloc (sizeof *cp);
+        if (cp == NULL)
+          {
+            palloc_free_page (t);
+            return TID_ERROR;
+          }
+        cp->tid = tid;
+        cp->exit_status = -1;
+        cp->exited = false;
+        cp->wait_called = false;
+        cp->parent_alive = true;
+        cp->load_success = false;
+        sema_init (&cp->wait_sema, 0);
+        sema_init (&cp->load_sema, 0);
+        list_push_back (&parent->child_list, &cp->elem);
+        t->parent_thread = parent;
+        t->child_info = cp;
+      }
+  }
+#endif
+
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -284,6 +311,22 @@ thread_exit (void)
 
 #ifdef USERPROG
   process_exit ();
+#endif
+
+  struct thread *cur = thread_current ();
+
+#ifdef USERPROG
+  if (cur->child_info != NULL)
+    {
+      struct child_process *cp = cur->child_info;
+      cp->exit_status = cur->process_exit_status;
+      cp->exited = true;
+      sema_up (&cp->wait_sema);
+      if (!cp->parent_alive)
+        free (cp);
+      cur->child_info = NULL;
+    }
+  cur->parent_thread = NULL;
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -463,6 +506,13 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+#ifdef USERPROG
+    list_init (&t->child_list);                 // 자식 리스트 초기화
+    t->child_info = NULL;
+    t->parent_thread = NULL;                    // 부모는 기본적으로 NULL
+    t->process_exit_status = -1;                // 종료 상태는 기본적으로 -1
+#endif
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

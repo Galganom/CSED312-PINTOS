@@ -17,9 +17,18 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
+#include "threads/synch.h"
+#include "userprog/syscall.h"
+
+#ifdef VM
+#include "vm/page.h"
+#include "vm/frame.h"
+#endif
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+extern struct lock filesys_lock;
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -28,43 +37,194 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  char *cmd_line_copy; // start_process에 전달할 원본 명령어 복사본
+  char *parsing_copy;  // strtok_r로 파싱할 복사본
+  char *prog_name;     // 파싱된 프로그램 이름
+  char *save_ptr;      // strtok_r 상태 저장용 포인터
   tid_t tid;
 
-  /* Make a copy of FILE_NAME.
+  /* Make a copy of FILE_NAME for parsing and another for start_process.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  // 원본 보존용 복사본 생성
+  cmd_line_copy = palloc_get_page (0);
+  if (cmd_line_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (cmd_line_copy, file_name, PGSIZE);
 
-  /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  // 파싱용 복사본 생성
+  parsing_copy = palloc_get_page (0);
+  if (parsing_copy == NULL) 
+    {
+      palloc_free_page (cmd_line_copy); // 앞에서 할당한 것도 해제
+      return TID_ERROR;
+    }
+  strlcpy (parsing_copy, file_name, PGSIZE);
+
+  /* Extract the program name using strtok_r. */
+  // 프로그램 이름 파싱
+  prog_name = strtok_r (parsing_copy, " ", &save_ptr);
+  if (prog_name == NULL) // 빈 문자열이나 공백만 들어온 경우 처리
+    {
+      palloc_free_page (cmd_line_copy);
+      palloc_free_page (parsing_copy);
+      return TID_ERROR;
+    }
+
+  /* Create a new thread to execute the program.
+     Pass the extracted program name as the thread name,
+     and the original command line copy as the argument to start_process. */
+  // 수정된 인자로 스레드 생성
+  tid = thread_create (prog_name, PRI_DEFAULT, start_process, cmd_line_copy);
+
+  /* Free the parsing copy, it's no longer needed. */
+  // 파싱용 복사본 해제
+  palloc_free_page (parsing_copy);
+
+  // 스레드 생성 실패 시 원본 복사본도 해제
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    {
+      /* If thread_create failed, free the command line copy too. */
+      palloc_free_page (cmd_line_copy); 
+    }
+    
   return tid;
 }
 
-/* A thread function that loads a user process and starts it
-   running. */
-static void
-start_process (void *file_name_)
+struct child_process *
+process_get_child_by_tid (tid_t child_tid)
 {
-  char *file_name = file_name_;
+  struct thread *cur = thread_current ();
+  struct list_elem *e;
+
+  for (e = list_begin (&cur->child_list); e != list_end (&cur->child_list);
+       e = list_next (e))
+    {
+      struct child_process *cp = list_entry (e, struct child_process, elem);
+      if (cp->tid == child_tid)
+        {
+          return cp;
+        }
+    }
+  
+  return NULL;
+}
+
+/* A thread function that loads a user process and starts it running. */
+static void
+start_process (void *command_line_) // Renamed parameter for clarity
+{
+  char *command_line = command_line_; // Original command line copy from process_execute aux
   struct intr_frame if_;
   bool success;
+  struct thread *cur = thread_current ();
+  struct child_process *cp = cur->child_info;
+
+#ifdef VM
+  // VM: SPT 초기화
+  vm_init (&cur->vm);
+  // mmap 리스트 초기화
+  list_init (&cur->mmap_list);
+  cur->next_mapid = 1;
+#endif
+
+  if (cur->fd_table == NULL)
+    {
+      cur->fd_table = palloc_get_page (PAL_ZERO);
+      if (cur->fd_table == NULL)
+        {
+          if (cp != NULL)
+            {
+              cp->load_success = false;
+              sema_up (&cp->load_sema);
+            }
+          palloc_free_page (command_line);
+          thread_exit ();
+        }
+      cur->fd_max = 2;
+    }
+
+  /* === Argument Parsing Logic Added === */
+  char *token, *save_ptr;
+  int argc = 0;
+  char **argv = NULL; // Dynamic allocation for argv
+
+  // Count arguments first using a temporary copy
+  char *count_copy = palloc_get_page(0); 
+  if (count_copy == NULL) {
+      palloc_free_page(command_line); // Free the original copy passed from process_execute
+      thread_exit(); 
+  }
+  strlcpy(count_copy, command_line, PGSIZE);
+  for (token = strtok_r (count_copy, " ", &save_ptr); token != NULL;
+       token = strtok_r (NULL, " ", &save_ptr)) {
+      argc++;
+  }
+  palloc_free_page(count_copy); // Free the counting copy
+
+  // Allocate argv array dynamically
+  argv = (char **)malloc(sizeof(char *) * argc); 
+  if (argv == NULL) {
+      palloc_free_page(command_line);
+      thread_exit();
+  }
+
+  // Populate argv using another temporary copy for parsing
+  int current_arg = 0;
+  char *parse_copy = palloc_get_page(0); 
+  if (parse_copy == NULL) {
+      free(argv); // Free argv if allocation fails
+      palloc_free_page(command_line);
+      thread_exit();
+  }
+  strlcpy(parse_copy, command_line, PGSIZE);
+  for (token = strtok_r (parse_copy, " ", &save_ptr); token != NULL;
+       token = strtok_r (NULL, " ", &save_ptr)) {
+      argv[current_arg++] = token;
+  }
+  char *prog_name = argv[0]; // Program name is the first token
+  /* === Argument Parsing Logic Ends === */
+
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  
+  // Load using the parsed program name (argv[0])
+  success = load (prog_name, &if_.eip, &if_.esp);
+
+  if (cp != NULL)
+    {
+      cp->load_success = success;
+      sema_up (&cp->load_sema);
+    }
+
+  /* === Stack Construction Logic Added === */
+  // If load succeeds, construct the user stack
+  if (success) 
+    {
+      construct_user_stack(argc, argv, &if_.esp);
+    }
+  /* === Stack Construction Logic Ends === */
+
+  /* Free resources used for parsing before jumping to user space */
+  free(argv);             // Free the dynamically allocated argv array
+  palloc_free_page(parse_copy); // Free the copy used for parsing argv
+  palloc_free_page (command_line); // Free the original command line copy passed from process_execute
+
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+  // Moved the check after freeing resources, before jumping
+  if (!success) {
+      cur->fd_max = 0;
+      if (cur->fd_table != NULL)
+        {
+          palloc_free_page (cur->fd_table);
+          cur->fd_table = NULL;
+        }
+      thread_exit (); 
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -74,6 +234,56 @@ start_process (void *file_name_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+}
+
+/* Constructs the user stack according to the x86 calling convention. */
+void
+construct_user_stack(int argc, char **argv, void **esp) 
+{
+    // Temporary storage for stack addresses of the copied argument strings
+    char *arg_addresses[argc]; 
+    int i;
+    size_t total_arg_len = 0; // Keep track for potential debugging or future use
+
+    // 1. Push argument strings onto the stack (from high address to low address)
+    //    and store their addresses.
+    for (i = 0; i < argc; i++) {
+        size_t arg_len = strlen(argv[i]) + 1; // Length including null terminator
+        *esp -= arg_len;
+        memcpy(*esp, argv[i], arg_len);   // Copy string to stack
+        arg_addresses[i] = *esp;          // Save the stack address of this string
+        total_arg_len += arg_len;
+    }
+
+    // 2. Word Align: Align the stack pointer to a multiple of 4 bytes.
+    int padding = (uintptr_t)*esp % 4;
+    if (padding != 0) {
+        *esp -= padding;                // Decrement stack pointer by padding amount
+        memset(*esp, 0, padding);       // Fill padding space with zeros
+    }
+
+    // 3. Push argument addresses (in reverse order onto the stack)
+    // Push null sentinel (argv[argc]) first
+    *esp -= sizeof(char *);             // Make space for the null pointer
+    **(char ***)esp = NULL;              // Write the null pointer
+
+    // Push addresses of the actual argument strings (argv[argc-1] down to argv[0])
+    for (i = argc - 1; i >= 0; i--) {
+        *esp -= sizeof(char *);             // Make space for the pointer
+        **(char ***)esp = arg_addresses[i]; // Write the string address
+    }
+
+    // 4. Push argv (the address of argv[0] on the stack) and argc
+    char **argv_on_stack = (char **)*esp; // This is where argv[0]'s pointer resides
+    *esp -= sizeof(char **);            // Make space for the argv pointer itself
+    **(char ****)esp = argv_on_stack;     // Write the address of argv[0] on stack
+
+    *esp -= sizeof(int);                // Make space for argc
+    **(int **)esp = argc;               // Write the argument count
+
+    // 5. Push fake return address (required by calling convention)
+    *esp -= sizeof(void *);             // Make space for the return address
+    **(void ***)esp = NULL;              // Write NULL as the fake return address
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -88,7 +298,24 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  struct child_process *cp = process_get_child_by_tid (child_tid);
+
+  if (cp == NULL)
+    return -1;
+
+  if (cp->wait_called)
+    return -1;
+
+  cp->wait_called = true;
+
+  if (!cp->exited)
+    sema_down (&cp->wait_sema);
+
+  int exit_status = cp->exit_status;
+  list_remove (&cp->elem);
+  cp->parent_alive = false;
+  free (cp);
+  return exit_status;
 }
 
 /* Free the current process's resources. */
@@ -97,6 +324,35 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  struct list_elem *e;
+
+  if (cur->cur_file != NULL)
+    {
+      lock_acquire (&filesys_lock);
+      file_allow_write (cur->cur_file);
+      file_close (cur->cur_file);
+      lock_release (&filesys_lock);
+      cur->cur_file = NULL;
+    }
+
+  if (cur->fd_table != NULL)
+    {
+      for (int i = 2; i < cur->fd_max; i++) 
+        {
+          close (i);
+        }
+      palloc_free_page (cur->fd_table);
+      cur->fd_table = NULL;
+    }
+  cur->fd_max = 0;
+
+#ifdef VM
+  // 1. mmap 파일 정리 (Dirty Page 파일 기록 수행)
+  munmap_all ();
+  
+  // 2. SPT 파괴 (해시 테이블 순회하며 각 vm_entry 삭제)
+  vm_destroy (&cur->vm);
+#endif
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -113,6 +369,17 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
+    }
+
+  while (!list_empty (&cur->child_list))
+    {
+      e = list_pop_front (&cur->child_list);
+      struct child_process *cp = list_entry (e, struct child_process, elem);
+      cp->parent_alive = false;
+      if (cp->exited)
+        free (cp);
+      else
+        cp->wait_called = true;
     }
 }
 
@@ -214,6 +481,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
+  bool filesys_lock_held = false;
+  bool exec_file_locked = false;
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -221,13 +490,18 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
-  /* Open executable file. */
+  /* Open executable file under filesystem lock. */
+  lock_acquire (&filesys_lock);
+  filesys_lock_held = true;
   file = filesys_open (file_name);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
+  file_deny_write (file);
+  exec_file_locked = true;
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -309,10 +583,19 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
+  t->cur_file = file;
+  file = NULL;
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  if (file != NULL)
+    {
+      if (exec_file_locked)
+        file_allow_write (file);
+      file_close (file);
+    }
+  if (filesys_lock_held)
+    lock_release (&filesys_lock);
   return success;
 }
 
@@ -387,6 +670,48 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
+#ifdef VM
+  // Lazy Loading: 실제 데이터를 로드하지 않고 메타데이터만 SPT에 등록
+  off_t current_ofs = ofs;
+  
+  while (read_bytes > 0 || zero_bytes > 0) 
+    {
+      // Calculate how to fill this page.
+      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+      size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+      // vm_entry 생성 및 초기화
+      struct vm_entry *vme = malloc (sizeof (struct vm_entry));
+      if (vme == NULL)
+        return false;
+
+      vme->type = VM_BIN;
+      vme->vaddr = upage;
+      vme->writable = writable;
+      vme->is_loaded = false;     // 아직 로드되지 않음
+      vme->file = file;           // file 객체는 process_exit 전까지 닫으면 안 됨
+      vme->offset = current_ofs;
+      vme->read_bytes = page_read_bytes;
+      vme->zero_bytes = page_zero_bytes;
+      vme->swap_slot = SWAP_ERROR;
+
+      // SPT에 등록
+      if (!insert_vme (&thread_current ()->vm, vme))
+        {
+          free (vme);
+          return false;
+        }
+
+      // Advance
+      read_bytes -= page_read_bytes;
+      zero_bytes -= page_zero_bytes;
+      current_ofs += page_read_bytes;
+      upage += PGSIZE;
+    }
+  return true;
+
+#else
+  // Original implementation without VM
   file_seek (file, ofs);
   while (read_bytes > 0 || zero_bytes > 0) 
     {
@@ -422,6 +747,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       upage += PGSIZE;
     }
   return true;
+#endif
 }
 
 /* Create a minimal stack by mapping a zeroed page at the top of
@@ -429,6 +755,55 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp) 
 {
+#ifdef VM
+  void *upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
+  
+  // vm_entry 생성 및 초기화 (스택은 VM_ANON 타입)
+  struct vm_entry *vme = malloc (sizeof (struct vm_entry));
+  if (vme == NULL)
+    return false;
+
+  vme->type = VM_ANON;
+  vme->vaddr = upage;
+  vme->writable = true;
+  vme->is_loaded = true;    // 스택은 바로 로드됨
+  vme->file = NULL;
+  vme->offset = 0;
+  vme->read_bytes = 0;
+  vme->zero_bytes = PGSIZE;
+  vme->swap_slot = SWAP_ERROR;
+
+  // 물리 프레임 할당
+  void *kpage = frame_allocate (PAL_ZERO, vme);
+  if (kpage == NULL)
+    {
+      free (vme);
+      return false;
+    }
+
+  // 페이지 테이블에 매핑
+  if (!install_page (upage, kpage, true))
+    {
+      frame_free (kpage);
+      free (vme);
+      return false;
+    }
+
+  // SPT에 등록
+  if (!insert_vme (&thread_current ()->vm, vme))
+    {
+      frame_free (kpage);
+      free (vme);
+      return false;
+    }
+
+  // 스택은 바로 사용되므로 pinned를 false로 설정
+  frame_pin_allocate (kpage, false);
+
+  *esp = PHYS_BASE;
+  return true;
+
+#else
   uint8_t *kpage;
   bool success = false;
 
@@ -442,6 +817,7 @@ setup_stack (void **esp)
         palloc_free_page (kpage);
     }
   return success;
+#endif
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
