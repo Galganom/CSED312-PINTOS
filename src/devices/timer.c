@@ -30,6 +30,9 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
+struct list sleeping_queue;
+
+
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
@@ -87,13 +90,15 @@ timer_elapsed (int64_t then)
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
 void
-timer_sleep (int64_t ticks) 
+timer_sleep (int64_t ticks)
 {
-  int64_t start = timer_ticks ();
+  if (ticks <= 0) return;
+  
+  int64_t start = timer_ticks();
+  enum intr_level old_level = intr_disable();
+  thread_sleep(start + ticks);
+  intr_set_level(old_level);
 
-  ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -172,6 +177,16 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+  if (thread_mlfqs) {
+    struct thread *t = thread_current();
+    if (t->status == THREAD_RUNNING) adv_scheduler_up_recent_cpu();
+    if (ticks % 4 == 0) adv_scheduler_update_priority();
+    if (ticks % TIMER_FREQ == 0) {
+      adv_scheduler_calc_load_avg();
+      adv_scheduler_upadte_recent_cpu();
+    }
+  }
+  thread_wakeup (ticks);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
@@ -244,3 +259,4 @@ real_time_delay (int64_t num, int32_t denom)
   ASSERT (denom % 1000 == 0);
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
 }
+

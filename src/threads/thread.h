@@ -83,15 +83,27 @@ typedef int tid_t;
 struct thread
   {
     /* Owned by thread.c. */
+    int nice;
+    int recent_cpu;
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
+    int priority;                       /* Thread's current priority. Can be temp raised by donation. Used for scheduling. 
+                                           NOTE: Role expanded by qc to handle effective priority. */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+
+    struct list_elem sleep_elem;
+    int64_t wakeup_tick;
+
+    /* def by qc, Additional Members to implement priority donation */
+    int base_priority; /* Original priority, saved before any donation happens. Used for restoring. */
+    struct lock *waiting_on_lock; /* The lock this thread is currently waiting for. Used to handle nested donation. */
+    struct list donations; /* List of other threads that are donating their priority to this one. */
+    struct list_elem donation_elem; /* list_elem used to put this thread in another thread's 'donations' list. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -131,11 +143,30 @@ typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
+void thread_priority_recalc (void);
 void thread_set_priority (int);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+/* def by qc to compare priority of threads. */
+/* Return true if thread A has a higher priority than thread B.*/
+bool thread_cmp_priority (const struct list_elem* a, const struct list_elem* b, void* aux UNUSED); // list_sort or list_insert_ordered will use this func.
+
+bool sema_cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+
+bool thread_cmp_donation_priority (const struct list_elem* a, const struct list_elem* b, void* aux UNUSED);
+
+/* def by qc, Tests if preemption should occur, causing the current thread to yield.*/
+void thread_test_preemption (void); // Called by thread_unblock, thread_set_priority, and sema_up.
+                                    // NOTE: thread_create calls thread_unblock.
+                                    // NOTE: lock_release calls sema_up.
+                                    // Warn: sema_up() is callable from interrupt. Must be careful yielding.
+
+void thread_sleep (int64_t ticks);
+void thread_wakeup (int64_t qlobal_ticks);
+bool wakeup_time_less_func(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 #endif /* threads/thread.h */
